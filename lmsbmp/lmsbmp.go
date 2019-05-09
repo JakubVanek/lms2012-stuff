@@ -49,6 +49,7 @@ func main() {
 	}
 }
 
+// upconvert converts an RGF file to a PNG file
 func upconvert(in *os.File, out *os.File) {
 	bmp, err := rgf.Read(in)
 	if err != nil {
@@ -60,6 +61,7 @@ func upconvert(in *os.File, out *os.File) {
 	}
 }
 
+// downconvert converts a PNG/JPG file to an RGF file.
 func downconvert(in *os.File, out *os.File, dither bool, thresh int) {
 	img, _, err := image.Decode(in)
 	if err != nil {

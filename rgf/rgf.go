@@ -1,4 +1,4 @@
-// bitmap
+// Package rgf provides functionality for reading and writing EV3 RGF files.
 package rgf
 
 import (
@@ -8,12 +8,16 @@ import (
 	"io"
 )
 
+// Bitmap represents RGF file contents.
+// It is a compact version of the XBM format.
 type Bitmap struct {
 	Width     uint8
 	Height    uint8
 	PixelRows [][]uint8
 }
 
+// Create a new RGF Bitmap.
+// This allocates memory for the bitmap data.
 func Create(Width, Height uint8) (bmp *Bitmap) {
 	bmp = &Bitmap{
 		Width:     Width,
@@ -26,6 +30,8 @@ func Create(Width, Height uint8) (bmp *Bitmap) {
 	return
 }
 
+// Get bitmap pixel data.
+// Returns true if pixel at [x, y] is to be black.
 func (img *Bitmap) Get(x, y uint8) bool {
 	if x >= img.Width || y >= img.Height {
 		return false
@@ -35,6 +41,7 @@ func (img *Bitmap) Get(x, y uint8) bool {
 	return (img.PixelRows[y][ByteIndex]>>BitIndex)&0x01 == 0x01
 }
 
+// Set pixel at [x, y] depending on the black bool flag.
 func (img *Bitmap) Set(x, y uint8, black bool) {
 	if x >= img.Width || y >= img.Height {
 		return
@@ -48,6 +55,7 @@ func (img *Bitmap) Set(x, y uint8, black bool) {
 	}
 }
 
+// Write RGF binary file to a stream.
 func (img *Bitmap) Write(w io.Writer) (int, error) {
 	header := [2]byte{byte(img.Width), byte(img.Height)}
 	n, err := w.Write(header[:])
@@ -64,6 +72,7 @@ func (img *Bitmap) Write(w io.Writer) (int, error) {
 	return n, nil
 }
 
+// Read RGF binary file from a stream.
 func Read(r io.Reader) (*Bitmap, error) {
 	header := [2]uint8{}
 	n, err := r.Read(header[:])
@@ -88,10 +97,12 @@ func Read(r io.Reader) (*Bitmap, error) {
 	return bmp, nil
 }
 
+// Bounds returns 'image' pkg compatible image bounding box.
 func (img *Bitmap) Bounds() image.Rectangle {
 	return image.Rect(0, 0, int(img.Width), int(img.Height))
 }
 
+// At returns 'image' pkg compatible color at [x, y].
 func (img *Bitmap) At(x, y int) color.Color {
 	if x < 0 || x >= int(img.Width) || y < 0 || y >= int(img.Height) {
 		return color.White
@@ -104,14 +115,18 @@ func (img *Bitmap) At(x, y int) color.Color {
 	}
 }
 
+// ColorModel returns 'image' pkg compatible color model.
 func (img *Bitmap) ColorModel() color.Model {
 	return color.RGBAModel
 }
 
+// colorToGray converts any color to a grayscale color.
 func colorToGray(col color.Color) color.Gray {
 	return color.GrayModel.Convert(col).(color.Gray)
 }
 
+// createFromImageSize clips existing image dimensions and
+// creates a bitmap with them.
 func createFromImageSize(src image.Image) (bmp *Bitmap, w, h int) {
 	w = src.Bounds().Max.X - src.Bounds().Min.X
 	h = src.Bounds().Max.Y - src.Bounds().Min.Y
@@ -129,6 +144,8 @@ func createFromImageSize(src image.Image) (bmp *Bitmap, w, h int) {
 	return
 }
 
+// ByThreshold loads an Image to a Bitmap by checking all
+// pixels against a threshold value.
 func ByThreshold(src image.Image, threshold uint8) *Bitmap {
 	bmp, w, h := createFromImageSize(src)
 	for y := 0; y < h; y++ {
@@ -141,6 +158,9 @@ func ByThreshold(src image.Image, threshold uint8) *Bitmap {
 	return bmp
 }
 
+// floatGrayMap converts Image to a flat normalized float64 array.
+// The resulting array has w*h length. Rows are laid sequentially top-down,
+// columns within them are laid left-to-right.
 func floatGrayMap(src image.Image, w, h int) (grayMap []float64) {
 	grayMap = make([]float64, w*h)
 
@@ -154,6 +174,9 @@ func floatGrayMap(src image.Image, w, h int) (grayMap []float64) {
 	return
 }
 
+// floydSteinbergDither applies Floyd-Steinberg dithering
+// to a float64 gray map.
+// Algorithm at https://en.wikipedia.org/wiki/Floyd%E2%80%93Steinberg_dithering
 func floydSteinbergDither(grayMap []float64, w, h int) {
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
@@ -179,6 +202,8 @@ func floydSteinbergDither(grayMap []float64, w, h int) {
 	}
 }
 
+// fillByGrayMap imports a float gray map to a Bitmap via
+// a 50% threshold value.
 func fillByGrayMap(src []float64, dst *Bitmap, w, h int) {
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
@@ -188,6 +213,8 @@ func fillByGrayMap(src []float64, dst *Bitmap, w, h int) {
 	}
 }
 
+// ByThreshold loads an Image to a Bitmap by performing
+// Floyd-Steinberg dithering on the grayscale image data.
 func ByDither(src image.Image) *Bitmap {
 	bmp, w, h := createFromImageSize(src)
 	grayMap := floatGrayMap(src, w, h)
