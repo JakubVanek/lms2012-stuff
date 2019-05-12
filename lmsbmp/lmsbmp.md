@@ -8,7 +8,7 @@ lmsbmp - LEGO MINDSTORMS EV3 bitmap converter
 
 # SYNOPSIS
 
-lmsbmp [--dither true/false] [--cutoff *level*] [--topng] *in-file* *out-file*
+lmsbmp --in=*in-file* --out=*out-file* [-x=*x0*] [-y=*y0*] [-w=*width*] [-h=*height*] [--bt601=*true/false*]
 
 # DESCRIPTION
 
@@ -16,24 +16,29 @@ Converts between EV3 Robot Graphics Files and ordinary images.
 
 # OPTIONS
 
---dither *true*/*false*
-: Enable or disable dithering. To enhance image quality, it is enabled
-  by default.
+--in=*in-file*
+: Input image, this can be either a RGF image or a JPEG/PNG/GIF image.
 
---cutoff *level*
-: When dithering is disabled, this value is used as a threshold for
-  deciding whether a pixel should be black or white.
+--out=*out-file*
+: Output image, this can be either a RGF image or a JPEG/PNG/GIF image.
 
---topng
-: When this flag is specified, RGF files will be converted to PNG. When
-  this flag is omitted, JPEG or PNG files will be converted to RGF.
+-x=*x0*
+: Crop the source image to start at this origin x coordinate.
 
-*in-file*
-: Input image, this can be either a JPEG/PNG file or a RGF file.
-  This depends on the program mode; see **--topng** switch. By default,
-  this is the JPEG/PNG file.
+-y=*y0*
+: Crop the source image to start at this origin y coordinate.
 
-*out-file*
-: Output path, this can be either a PNG file or a RGF file.
-  This depends on the program mode; see **--topng** switch. By default,
-  this is the EV3 RGF file.
+-w=*width*
+: Crop the source image to have the following width. If RGF is specified
+  as the destination format, the image is also cropped to be at most 255
+  pixels wide.
+
+-h=*height*
+: Crop the source image to have the following height. If RGF is specified
+  as the destination format, the image is also cropped to be at most 255
+  pixels tall.
+
+--bt601=*true/false*
+: Whether to perform RGB -> BT.601 grayscale conversion before saving
+  the image. This may make the image look better or worse, so it is best
+  to try and see what looks better.
