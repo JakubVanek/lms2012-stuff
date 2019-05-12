@@ -14,7 +14,7 @@ Some sort of viewer might be useful. *TODO*
 
 Done.
 
-### NIH syndrome version in Go
+### Small utility + library in Go
 - `/rgf` - Go library for loading and saving RGF images.
 - `/lmsbmp` - Go utility built around the `rgf` library. See the `/lmsbmp/lmsbmp.md` manpage for details.
 
