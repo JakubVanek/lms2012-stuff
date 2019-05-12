@@ -29,15 +29,44 @@ convert source.png -crop WxH+X+Y -dither FloydSteinberg -remap pattern:gray50 de
 
 *TODO*
 
+Format:
+
+- byte 1-2: big-endian u16 format magic
+  - `0x0100` - uncompressed u8 8 kHz samples
+  - `0x0101` - IMA ADPCM? 8 KHz samples
+- byte 3-4: big-endian u16 sound data length
+- byte 5-6: big-endian u16 sample rate
+  - it is not parsed in c_sound - 8 kHz is the only possible value
+- byte 7-8: big-endian u16 "sound playback mode"
+  - it is not parsed in c_sound; but it may have a purpose elsewhere
+- bytes 9-end: sound data
+  - either u8 samples
+  - or ADPCM 4bit samples
+
+U8 decode:
+```sh
+LENGTH=$(od -An --endian=big -j 2 -N 2 -t u2 input.rsf)
+tail -c +9 input.rsf | head -c $LENGTH | sox -t raw -r 8000 -b 8 -e unsigned-integer -c 1 - output.wav
+```
+
+U8 encode:
+```sh
+sox input.wav -t raw -r 8000 -b 8 -e unsigned-integer -c 1 output.raw
+LENGTH=$(cat output.raw | wc -c)
+echo -ne '\x01\x00' >output.rsf
+printf "0: %.4x" $LENGTH | xxd -r -g0 >>output.rsf
+echo -ne '\x1F\x40\x00\x00' >>output.rsf
+cat output.raw >>output.rsf
+```
+
 ## RDF (Robot Datalog File)
 
 *TODO*
 
 ## RAF (Robot Archive File)
 
-*TODO*
+This is just a tarball.
 
-However, you can create the file using tar:
 ```sh
 tar -czf archive.raf <files> # create
 tar -xzf archive.raf # extract
