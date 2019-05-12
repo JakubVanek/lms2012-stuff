@@ -52,3 +52,9 @@ This is a simple text file.
 This is also a text file.
 
 Typedata parser might be useful. *TODO*
+
+
+## Disclaimer
+
+LEGO® is a trademark of the LEGO Group of companies which does not sponsor,
+authorize or endorse this software.
