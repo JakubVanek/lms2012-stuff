@@ -1,68 +1,67 @@
-interrupt table
----------------
-RESET => startup       @0x99dc
-TIM1  => us10_tick     @0x9a22
-TIM2  => ms_tick       @0x9a48
-TX_OK => uart_tx_done  @0x988d
-RX_OK => uart_rx_done  @0x98e0
-other => bad_irq       @0x9bba
-
-
-global RAM variables
---------------------
-; pseudo-variables
-u8   callerSavedRegs[8] @ [$00]
-u8   calleeSavedRegs[8] @ [$08]
-
-; real variables
-u8   lastColor    @ [$10]
-u8   mainState    @ [$11]
-u8   initState    @ [$12]
-u8   rxBuffer[35] @ [$13]
-u8   txBuffer[35] @ [$36]
-u8   frame[35]    @ [$59]
-f32  redFactor    @ [$7c]
-f32  greenFactor  @ [$80]
-f32  blueFactor   @ [$84]
-u16  lastRefRawFg @ [$88]
-u16  lastRefRawBg @ [$8a]
-u16  lastRefRgbR  @ [$8c]
-u16  lastRefRgbG  @ [$8e]
-u16  lastRefRgbB  @ [$90]
-u16  lastMsTick   @ [$92]
-u16  eventTimer   @ [$94]
-u16 *txTarget     @ [$96]
-u16 *rxTarget     @ [$98]
-u32 *eepromPtr    @ [$9a] ; never read
-u16  msCounter    @ [$9c]
-u8   forceSend    @ [$9e]
-u8   calAuthOk    @ [$9f]
-u8   lastAmbient  @ [$a0]
-u8   lastReflect  @ [$a1]
-u8   pauseCounter @ [$a2]
-u8   syncAttempts @ [$a3]
-u8   us10Counter  @ [$a4]
-u8   ambientMode  @ [$a5]
-u8   txRemaining  @ [$a6]
-u8   txActive     @ [$a7]
-u8   rxWritePtr   @ [$a8]
-u8   rxReadPtr    @ [$a9]
-u8   frameLength  @ [$aa]
-u8   framePtr     @ [$ab]
-u8   frameXor     @ [$ac]
-
-EEPROM variables
-----------------
-
-u32 redCoefficient   @ [$4000] ; real value is /1000
-u32 greenCoefficient @ [$4008] ; real value is /1000
-u32 blueCoefficient  @ [$400c] ; real value is /1000
-
-
-code
-----
+// interrupt table
+// ---------------
+// RESET          =>  startup       @0x99dc
+// TIM1 overflow  =>  us10_tick     @0x9a22
+// TIM2 overflow  =>  ms_tick       @0x9a48
+// UART byte TX   =>  uart_tx_done  @0x988d
+// UART byte RX   =>  uart_rx_done  @0x98e0
+// all other      =>  bad_irq       @0x9bba
 
 #include "program.h"
+
+// global RAM variables
+// --------------------
+// pseudo-variables
+// u8 callerSavedRegs[8]; // @ [$00]
+// u8 calleeSavedRegs[8]; // @ [$08]
+
+// real variables
+u8   lastColor;    // @ [$10]
+u8   mainState;    // @ [$11]
+u8   initState;    // @ [$12]
+u8   rxBuffer[35]; // @ [$13]
+u8   txBuffer[35]; // @ [$36]
+u8   frame[35];    // @ [$59]
+f32  redFactor;    // @ [$7c]
+f32  greenFactor;  // @ [$80]
+f32  blueFactor;   // @ [$84]
+u16  lastRefRawFg; // @ [$88]
+u16  lastRefRawBg; // @ [$8a]
+u16  lastRefRgbR;  // @ [$8c]
+u16  lastRefRgbG;  // @ [$8e]
+u16  lastRefRgbB;  // @ [$90]
+u16  lastMsTick;   // @ [$92]
+u16  eventTimer;   // @ [$94]
+u16 *txTarget;     // @ [$96]
+u16 *rxTarget;     // @ [$98]
+u32 *eepromPtr;    // @ [$9a] ; never read
+u16  msCounter;    // @ [$9c]
+u8   forceSend;    // @ [$9e]
+u8   calAuthOk;    // @ [$9f]
+u8   lastAmbient;  // @ [$a0]
+u8   lastReflect;  // @ [$a1]
+u8   pauseCounter; // @ [$a2]
+u8   syncAttempts; // @ [$a3]
+u8   us10Counter;  // @ [$a4]
+u8   ambientMode;  // @ [$a5]
+u8   txRemaining;  // @ [$a6]
+u8   txActive;     // @ [$a7]
+u8   rxWritePtr;   // @ [$a8]
+u8   rxReadPtr;    // @ [$a9]
+u8   frameLength;  // @ [$aa]
+u8   framePtr;     // @ [$ab]
+u8   frameXor;     // @ [$ac]
+
+// EEPROM variables
+// ----------------
+
+#define EEPROM_RED_COEF (*((u32*) 0x4000))
+#define EEPROM_GRN_COEF (*((u32*) 0x4004))
+#define EEPROM_BLU_COEF (*((u32*) 0x400c))
+
+// code
+// ----
+
 
 void stateMachine() {
   u16 currentMs = msCounter;
@@ -1172,9 +1171,9 @@ void saveEeprom(u32 *params) {
   FLASH_DUKR = 0xAE;
   FLASH_DUKR = 0x56;
 
-  *((u32*) 0x4000) = params[0];
-  *((u32*) 0x4004) = params[1];
-  *((u32*) 0x4008) = params[2];
+  EEPROM_RED_COEF = params[0];
+  EEPROM_GRN_COEF = params[1];
+  EEPROM_BLU_COEF = params[2];
 
   FLASH_IAPSR &= ~(1 << EOP);
 }
@@ -1218,10 +1217,10 @@ void uart_rx_done() {
 
 // at address 0x98fd
 void loadEeprom(u32 *params) {
-  params[0] = *((u32*) 0x4000);
-  params[1] = *((u32*) 0x4004);
-  params[2] = *((u32*) 0x4008);
-  eepromPtr = (u32*) 0x4008; // unused
+  params[0] = EEPROM_RED_COEF;
+  params[1] = EEPROM_GRN_COEF;
+  params[2] = EEPROM_BLU_COEF;
+  eepromPtr = &EEPROM_GRN_COEF; // unused
 }
 
 // at address 0x991a
