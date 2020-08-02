@@ -8,6 +8,7 @@
 // all other      =>  bad_irq       @0x9bba
 
 #include "program.h"
+#include "io.h"
 
 // global RAM variables
 // --------------------
@@ -62,6 +63,10 @@ u8   frameXor;     // @ [$ac]
 // code
 // ----
 
+// todos:
+// - convert data to C syntax
+// - reorder functions for better readability
+// - check if this thing compiles
 
 void stateMachine() {
   u16 currentMs = msCounter;
@@ -1180,7 +1185,9 @@ void saveEeprom(u32 *params) {
 
 // at address 0x9869
 void uart_start() {
-  UART1_DIV  = 0x1a0a; // 2400 baud
+  // 2400 baud
+  UART1_BRR2 = 0x1A;
+  UART1_BRR1 = 0xA0;
   UART1_CR1  = 0x00;
   UART1_CR2  = 1 << TEN;
   UART1_CR2 |= 1 << REN;
@@ -1193,7 +1200,7 @@ void uart_start() {
 // at address 0x988d
 void uart_tx_done() {
   if (txRemaining == 0) {
-    UART1_CR2 &= ~TIEN; // disable tx interrupt
+    UART1_CR2 &= ~(1 << TIEN); // disable tx interrupt
     txActive = 0;
     return;
   }
@@ -1235,7 +1242,7 @@ void setup_tick() {
   TIM2_IER   = 1;     // enable only overflow/update interrupt
   TIM2_PSCR  = 0;     // run at master clock
   TIM2_ARR   = 16000; // 1 ms tick
-  asm("rim"); // unmask interrupts
+  enableInterrupts(); // unmask interrupts
 }
 
 // at address 0x9934
@@ -1251,7 +1258,7 @@ void wdg_setup() {
 // at forgotten address
 // (however this function is synthesized from sub-functions anyway)
 void init_memory() {
-  memset(0x0013, 0x00, 154);
+  // memset(0x0013, 0x00, 154); // implicit in C
   lastColor = 0xFF;
   mainState = 0x02;
   initState = 0x01;
@@ -1277,8 +1284,7 @@ void adc_setup() {
 
 // at address 0x99dc
 void startup() {
-  register u16 stackPointer asm ("SP");
-  stackPointer = 0x03ff;
+  setStackPointer(0x03ff);
 
   init_memory();
   mainloop();
@@ -1290,7 +1296,9 @@ tx_status_t enter_high_baudrate() {
   if (txActive)
     return TX_BUSY;
 
-  UART1_DIV = 0x115; // 57600 baud
+  // 57600 baud
+  UART1_BRR2 = 0x05;
+  UART1_BRR1 = 0x11;
   return TX_OK;
 }
 
