@@ -605,351 +605,362 @@ switchEnd:
       break;
     }
   }
-  return;
 }
 
-0x8ed0 uart_rx_process(u8* pOut in X, ? in Y, u8 newFrame out A):
-  u8 currentByte
-  u8 xorBytes
-  newFrame = 0
+// at address 0x8ed0
+u8 uart_rx_process(u8* pOut) {
+  u8 newFrame = false;
 
   while (rxReadPtr != rxWritePtr) {
 
-    ; consume new byte
-    currentByte = rxBuffer[rxReadPtr++]
-    if (rxReadPtr == 35)
-      rxReadPtr = 0
+    // consume new byte
+    u8 received = rxBuffer[rxReadPtr++];
+    if (rxReadPtr == 35) {
+      rxReadPtr = 0;
+    }
 
-    ; initialize frame decoding if needed
+    // initialize frame decoding if needed
     if (frameLength == 0) {
-      ; system msgs      SYNC                   NACK                   ACK
-      if (currentByte == 0x00 || currentByte == 0x02 || currentByte == 0x04) {
-        ; => forward immediately
-        pOut[0] = currentByte
-        newFrame = 1
-        continue
+      // forward short SYS messages
+      if (received == SYNC_MSG || received == NACK_MSG || received == ACK_MSG) {
+        pOut[0] = received;
+        newFrame = true;
+        continue;
       }
-      ; calculate expected frame length from first byte
-      frameLength = 2 + 1 << ((currentByte >> 3) & 0x07)
-      if (frameLength >= 36) {
-        ; too long => ignore packet
-        frameLength = 0
+
+      // calculate expected frame length from first byte
+      frameLength = 2 + 1 << ((received >> 3) & 0x07);
+      if (frameLength >= 36) { // too long
+        frameLength = 0;
       } else {
-        ; OK, initialize decoding
-        frameXor = 0xFF
-        frame[0] = currentByte
-        framePtr = 1
+        // OK, initialize decoding
+        frameXor = 0xFF;
+        frame[0] = received;
+        framePtr = 1;
       }
-      continue
+      // look for more bytes
+      continue;
     }
 
-    ; continue with reassembly
-    frame[framePtr++] = currentByte
+    // continue with reassembly
+    frame[framePtr++] = received;
     if (framePtr < frameLength)
-      continue
+      continue;
 
-    ; reassembly complete
-    ; calculate parity + copy to output buffer
-    u8* xorPtr = &frame[0]
-    for (xorBytes = 0, xorBytes < frameLength-1, xorBytes++) {
-      frameXor ^= *xorPtr
-      *pOut++   = *xorPtr++
+    // reassembly complete
+    // calculate check byte + copy to output buffer
+    u8* xorPtr = &frame[0];
+    u8 xorCount;
+    for (xorCount = 0, xorCount < frameLength-1, xorCount++) {
+      frameXor ^= *xorPtr;
+      *pOut++   = *xorPtr++;
     }
 
-    ; reset frame decoding
-    frameLength = 0
+    // reset frame decoding
+    frameLength = 0;
 
-    ; check parity
-    if (frameXor != frame[xorBytes]) {
-      if (txActive)
-        while(1) {} ; cannot send NACK, bye bye (= let the holy watchdog save us)
+    // verify check byte
+    if (frameXor != frame[xorCount]) {
+      if (txActive) {
+        while(1) {} // cannot send NACK, let the watchdog expire
+      }
 
-      txBuffer[0] = 0x02 ; NACK
-      txTarget    = &txBuffer[0]
-      UART1_DR    = txBuffer[0]
-      txRemaining = 1
-      continue
+      txBuffer[0] = NACK_MSG;
+      txTarget    = &txBuffer[0];
+      UART1_DR    = txBuffer[0];
+      txRemaining = 1;
+      continue;
     }
-    newFrame = 1
+    newFrame = true;
   }
-  return (A = dataFinished)
+  return newFrame;
+}
 
+// at address 0x8fbd
+void measureAllColors(u16* pRed, u16* pGreen, u16* pBlue, u16* pBlack) {
+  u16 black1, black2;
 
-0x8fbd measureAllColors(u16* pRed in X, u16* pGreen in Y, u16* pBlue in u16[$00], u16* pBlack in u16[$02]):
-  u16 black1
-  u16 black2
+  measureADC(ADC_COLOR, &black1, 4);
 
-  measureADC(channel=4, dst=&black1, time=4)
+  PA_ODR |= (1 << RED1);
+  PA_ODR |= (1 << RED2);
+  measureADC_timed(ADC_COLOR, pRed, 4);
+  PA_ODR &= ~(1 << RED1);
+  PA_ODR &= ~(1 << RED2);
 
-  PA_ODR |= (1 << RED1)
-  PA_ODR |= (1 << RED2)
-  measureADC_timed(channel=4, dst=pRed, time=4)
-  PA_ODR &= ~(1 << RED1)
-  PA_ODR &= ~(1 << RED2)
+  PA_ODR |=  (1 << GREEN1);
+  PC_ODR |=  (1 << GREEN2);
+  measureADC_timed(ADC_COLOR, pGreen, 4);
+  PA_ODR &= ~(1 << GREEN1);
+  PC_ODR &= ~(1 << GREEN2);
 
-  PA_ODR |=  (1 << GREEN1)
-  PC_ODR |=  (1 << GREEN2)
-  measureADC_timed(channel=4, dst=pGreen, time=4)
-  PA_ODR &= ~(1 << GREEN1)
-  PC_ODR &= ~(1 << GREEN2)
+  PC_ODR |=  (1 << BLUE1);
+  PC_ODR |=  (1 << BLUE2);
+  measureADC_timed(ADC_COLOR, pBlue, 4);
+  PC_ODR &= ~(1 << BLUE1);
+  PC_ODR &= ~(1 << BLUE2);
 
-  PC_ODR |=  (1 << BLUE1)
-  PC_ODR |=  (1 << BLUE2)
-  measureADC_timed(channel=4, dst=pBlue, time=4)
-  PC_ODR &= ~(1 << BLUE1)
-  PC_ODR &= ~(1 << BLUE2)
+  measureADC_timed(ADC_COLOR, &black2, 4);
 
-  measureADC_timed(channel=4, dst=&black2, time=4)
-
-  *pBlack = (black1 + black) / 2
+  *pBlack = (black1 + black) / 2;
 
   if (*pRed < *pBlack) {
-    *pRed = *pBlack - *pRed
+    *pRed = *pBlack - *pRed;
   } else {
-    *pRed = 0
+    *pRed = 0;
   }
 
   if (*pGreen < *pBlack) {
-    *pGreen = *pBlack - *pGreen
+    *pGreen = *pBlack - *pGreen;
   } else {
-    *pGreen = 0
+    *pGreen = 0;
   }
 
   if (*pBlue < *pBlack) {
-    *pBlue = *pBlack - *pBlue
+    *pBlue = *pBlack - *pBlue;
   } else {
-    *pBlue = 0
+    *pBlue = 0;
   }
+}
 
-  return
+// at address 0x90a4
+u8 measureReflectivity(led_t mode) {
+  u16 color, black;
 
-0x90a4 measureReflectivity(u8 mode in A):
-  u16 color
-  u16 black
+  if (mode == LED_RED) {
+    PA_ODR |=  (1 << RED1);
+    PA_ODR |=  (1 << RED2);
+    measureADC_timed(ADC_COLOR, &color, 12);
+    PA_ODR &= ~(1 << RED1);
+    PA_ODR &= ~(1 << RED2);
+    measureADC_timed(ADC_COLOR, &black, 4);
 
-  if (mode == 1) {
-    PA_ODR |=  (1 << RED1)
-    PA_ODR |=  (1 << RED2)
-    measureADC_timed(channel=4, dst=&color, time=12)
-    PA_ODR &= ~(1 << RED1)
-    PA_ODR &= ~(1 << RED2)
-    measureADC_timed(channel=4, dst=&black, time=4)
+  } else if (mode == LED_GREEN) {
+    PC_ODR |=  (1 << GREEN1);
+    PA_ODR |=  (1 << GREEN2);
+    measureADC_timed(ADC_COLOR, &color, 12);
+    PC_ODR &= ~(1 << GREEN1);
+    PA_ODR &= ~(1 << GREEN2);
+    measureADC_timed(ADC_COLOR, &black, 4);
 
-  } else if (mode == 2) {
-    PC_ODR |=  (1 << GREEN1)
-    PA_ODR |=  (1 << GREEN2)
-    measureADC_timed(channel=4, dst=&color, time=12)
-    PC_ODR &= ~(1 << GREEN1)
-    PA_ODR &= ~(1 << GREEN2)
-    measureADC_timed(channel=4, dst=&black, time=4)
-
-  } else if (mode == 3) {
-    PC_ODR |=  (1 << BLUE1)
-    PC_ODR |=  (1 << BLUE2)
-    measureADC_timed(channel=4, dst=&color, time=12)
-    PC_ODR &= ~(1 << BLUE1)
-    PC_ODR &= ~(1 << BLUE2)
-    measureADC_timed(channel=4, dst=&black, time=4)
+  } else if (mode == LED_BLUE) {
+    PC_ODR |=  (1 << BLUE1);
+    PC_ODR |=  (1 << BLUE2);
+    measureADC_timed(ADC_COLOR, &color, 12);
+    PC_ODR &= ~(1 << BLUE1);
+    PC_ODR &= ~(1 << BLUE2);
+    measureADC_timed(ADC_COLOR, &black, 4);
   }
 
   if (color >= black) {
-    color = color - black
+    color = color - black;
   } else {
-    color = black - color
+    color = black - color;
   }
 
-  A = (u16)( (float) color * redFactor / 4.09f )
-  if (A > 100) A = 100
-  return
+  u8 result  = (u16)( (float) color * redFactor / 4.09f );
+  if (result > 100)
+    result = 100;
 
-0x9169 gpio_setup():
-  ; inputs
-  PD_DDR &= ~(1 << COLOR)
-  PD_CR1 &= ~(1 << COLOR)
-  PD_CR2 &= ~(1 << COLOR)
-  PD_DDR &= ~(1 << AMBIENT)
-  PD_CR1 &= ~(1 << AMBIENT)
-  PD_CR2 &= ~(1 << AMBIENT)
+  return result;
+}
 
-  ; measurement adjusting knobs
-  PC_DDR |=  (1 << BRIGHT)
-  PC_ODR &= ~(1 << BRIGHT)
-  PC_CR1 |=  (1 << BRIGHT)
-  PC_DDR &= ~(1 << CAP)
-  PC_CR1 &= ~(1 << CAP)
-  PC_CR2 &= ~(1 << CAP)
+// at address 0x9169
+void gpio_setup() {
+  // inputs
+  PD_DDR &= ~(1 << COLOR);
+  PD_CR1 &= ~(1 << COLOR);
+  PD_CR2 &= ~(1 << COLOR);
+  PD_DDR &= ~(1 << AMBIENT);
+  PD_CR1 &= ~(1 << AMBIENT);
+  PD_CR2 &= ~(1 << AMBIENT);
 
-  ; blue led
-  PC_DDR |=  (1 << BLUE1)
-  PC_ODR &= ~(1 << BLUE1)
-  PC_CR1 |=  (1 << BLUE1)
-  PC_DDR |=  (1 << BLUE2)
-  PC_ODR &= ~(1 << BLUE2)
-  PC_CR1 |=  (1 << BLUE2)
+  // measurement adjusting knobs
+  PC_DDR |=  (1 << BRIGHT);
+  PC_ODR &= ~(1 << BRIGHT);
+  PC_CR1 |=  (1 << BRIGHT);
+  PC_DDR &= ~(1 << CAP);
+  PC_CR1 &= ~(1 << CAP);
+  PC_CR2 &= ~(1 << CAP);
 
-  ; green led
-  PC_DDR |=  (1 << GREEN1)
-  PC_ODR &= ~(1 << GREEN1)
-  PC_CR1 |=  (1 << GREEN1)
-  PA_DDR |=  (1 << GREEN2)
-  PA_ODR &= ~(1 << GREEN2)
-  PA_CR1 |=  (1 << GREEN2)
+  // blue led
+  PC_DDR |=  (1 << BLUE1);
+  PC_ODR &= ~(1 << BLUE1);
+  PC_CR1 |=  (1 << BLUE1);
+  PC_DDR |=  (1 << BLUE2);
+  PC_ODR &= ~(1 << BLUE2);
+  PC_CR1 |=  (1 << BLUE2);
 
-  ; red led
-  PA_DDR |=  (1 << RED1)
-  PA_ODR &= ~(1 << RED1)
-  PA_CR1 |=  (1 << RED1)
-  PA_DDR |=  (1 << RED2)
-  PA_ODR &= ~(1 << RED2)
-  PA_CR1 |=  (1 << RED2)
+  // green led
+  PC_DDR |=  (1 << GREEN1);
+  PC_ODR &= ~(1 << GREEN1);
+  PC_CR1 |=  (1 << GREEN1);
+  PA_DDR |=  (1 << GREEN2);
+  PA_ODR &= ~(1 << GREEN2);
+  PA_CR1 |=  (1 << GREEN2);
 
-  ; NC
-  PB_DDR |=  (1 << PB4)
-  PB_ODR &= ~(1 << PB4)
-  PB_CR1 |=  (1 << PB4)
+  // red led
+  PA_DDR |=  (1 << RED1);
+  PA_ODR &= ~(1 << RED1);
+  PA_CR1 |=  (1 << RED1);
+  PA_DDR |=  (1 << RED2);
+  PA_ODR &= ~(1 << RED2);
+  PA_CR1 |=  (1 << RED2);
 
-  ; NC
-  PB_DDR |=  (1 << PB5)
-  PB_ODR &= ~(1 << PB5)
-  PB_CR1 |=  (1 << PB5)
+  // NC
+  PB_DDR |=  (1 << PB4);
+  PB_ODR &= ~(1 << PB4);
+  PB_CR1 |=  (1 << PB4);
 
-  ; NC
-  PD_DDR |=  (1 << PD4)
-  PD_ODR &= ~(1 << PD4)
-  PD_CR1 |=  (1 << PD4)
+  // NC
+  PB_DDR |=  (1 << PB5);
+  PB_ODR &= ~(1 << PB5);
+  PB_CR1 |=  (1 << PB5);
 
-  ; ADC setup
-  ADC_CSR  = 0x04 ; AIN4
-  ADC_CR1  = 0x20 ; f_ADC = f_MASTER/4
-  ADC_CR1 |= (1 << ADON)
-  ADC_TDRL = 0x18 ; AIN3 | AIN4
+  // NC
+  PD_DDR |=  (1 << PD4);
+  PD_ODR &= ~(1 << PD4);
+  PD_CR1 |=  (1 << PD4);
 
-  ; NC
-  PD_DDR |=  (1 << PD4)
-  PD_ODR &= ~(1 << PD4)
-  PD_CR1 |=  (1 << PD4)
-  return
+  // ADC setup
+  ADC_CSR  = 0x04;        // AIN4
+  ADC_CR1  = 0x20;        // f_ADC = f_MASTER/4
+  ADC_CR1 |= (1 << ADON); // enable
+  ADC_TDRL = 0x18;        // AIN3 | AIN4
 
+  // NC
+  PD_DDR |=  (1 << PD4);
+  PD_ODR &= ~(1 << PD4);
+  PD_CR1 |=  (1 << PD4);
+}
 
-0x9222 identifyColor(u16 red, u16 green, u16 blue, u8 code out A):
-  float fRed   = (float) red
-  float fGreen = (float) green
+// at address 0x9222
+color_code_t identifyColor(u16 red, u16 green, u16 blue) {
+  float fRed   = (float) red;
+  float fGreen = (float) green;
 
-  if (red   < 11 && green < 11 && blue  < 11)
-    return 0 ; unknown
+  if (red < 11 && green < 11 && blue < 11)
+    return COLOR_NONE;
 
   if ((fRed / fGreen) >= 2.5f)
-    return 5 ; red
+    return COLOR_RED;
 
   if (red >= 150 && green >= 150 && blue >= 150)
-    return 6; white
+    return COLOR_WHITE;
 
   if ((fGreen / fRed) >= 2.0f && blue < 101)
-    return 3 ; green
+    return COLOR_GREEN;
 
   if (blue >= 100)
-    return 2 ; blue
+    return COLOR_BLUE;
 
   if (red >= 130)
-    return 4 ; yellow
+    return COLOR_YELLOW;
 
   if (red >= 70)
-    return 7 ; brown
+    return COLOR_BROWN;
 
-  return 1 ; black
+  return COLOR_BLACK;
+}
 
+// at address 0x92d9
+u16 measureAmbient(u16 brightness out X) {
+  u16 measurement;
+  measureADC(ADC_AMBIENT, &measurement);
 
-0x92d9 measureAmbient(u16 brightness out X):
-  u16 measurement
-  measureADC(channel=3, dst=&measurement)
-
-  if (ambientMode == 1) {
+  if (ambientMode == AMBIENT_DARK) {
     if (measurement >= 801) {
-      PC_DDR |=  (1 << BRIGHT)
-      PC_ODR &= ~(1 << BRIGHT)
-      PC_CR1 |=  (1 << BRIGHT)
-      ambientMode = 2
+      PC_DDR |=  (1 << BRIGHT);
+      PC_ODR &= ~(1 << BRIGHT);
+      PC_CR1 |=  (1 << BRIGHT);
+      ambientMode = AMBIENT_BRIGHT;
     }
 
-    for (A = 0, A <= 60, A++) {
-      if (LUT1[A] >= measurement)
-        break
-      brightness = A ; possible off-by-one error
+    brightness = 0;
+    for (u8 i = 0, i <= 60, i++) {
+      if (LUT1[i] >= measurement)
+        break;
+      brightness = i; // possible off-by-one error in translation to C
     }
 
-  } else if (ambientMode == 2) {
+  } else if (ambientMode == AMBIENT_BRIGHT) {
     if (measurement < 15) {
-      PC_DDR &= ~(1 << BRIGHT)
-      PC_CR1 &= ~(1 << BRIGHT)
-      ambientMode = 1
+      PC_DDR &= ~(1 << BRIGHT);
+      PC_CR1 &= ~(1 << BRIGHT);
+      ambientMode = AMBIENT_DARK;
     }
 
-    for (A = 0, A <= 50, A++) {
-      if (LUT2[A] >= measurement)
-        break
-      brightness = A + 50 ; possible off-by-one error
+    brightness = 50;
+    for (u8 i = 0, i <= 50, i++) {
+      if (LUT2[i] >= measurement)
+        break;
+      brightness = i + 50; // possible off-by-one error in translation to C
     }
   }
 
-  PC_ODR |=  (1 << BLUE1)
-  PC_ODR |=  (1 << BLUE2)
-  measureADC_timed(channel=3, dst=&measurement, time=1)
-  PC_ODR &= ~(1 << BLUE1)
-  PC_ODR &= ~(1 << BLUE2)
-  return
+  // dummy measurement for blue glow
+  PC_ODR |=  (1 << BLUE1);
+  PC_ODR |=  (1 << BLUE2);
+  measureADC_timed(ADC_AMBIENT, &measurement, 1);
+  PC_ODR &= ~(1 << BLUE1);
+  PC_ODR &= ~(1 << BLUE2);
+}
 
-0x9373 measureADC_timed(channel in A, dst in X, time in u8[$00]):
-  SP -= 3
-  TIM1_IER  = UIE  ; overflow event
-  TIM1_ARR  = 160  ; set overflow
-  TIM1_CNTR = 0    ; reset counter
-  TIM1_CR1  = CEN  ; enable
-  us10Counter = 0x00
+// at address 0x9373
+void measureADC_timed(adc_channel_t channel, u16 *pDst, u8 time) {
+  TIM1_IER  = UIE;  // overflow event
+  TIM1_ARR  = 160;  // set overflow
+  TIM1_CNTR = 0;    // reset value
+  TIM1_CR1  = CEN;  // enable timer
+  us10Counter = 0;
 
   while (us10Counter <= (time - 1)) {}
 
-  ADC_CSR &= 0xF0 | channel
-  ADC_CSR &= ~(1 << EOC)
-  ADC_CR1 |=  (1 << ADON)
+  ADC_CSR &= 0xF0;         // unset channel
+  ADC_CSR |= channel;      // set channel
+  ADC_CSR &= ~(1 << EOC);  // clear end-of-conversion
+  ADC_CR1 |=  (1 << ADON); // start new conversion
 
   while (us10Counter <= (time + 1)) {}
 
-  TIM1_CR1 &= ~(1 << CEN)
+  TIM1_CR1 &= ~(1 << CEN); // disable timer
 
-  u16(dst) = (high << 2) | ( low & 0x03 )
-  SP += 3
-  return
+  u8 high = ADC_DRH;
+  u8 low  = ADC_DRL;
+  *pDst = (high << 2) | ( low & 0x03 );
+}
 
 
-0x940c measureSingleColor(u8 mode in A, u16 *pColor in X, u16 *pBlack in Y):
-  if (mode == 1) {
-    PA_ODR |=  (1 << RED1)
-    PA_ODR |=  (1 << RED2)
-    measureADC_timed(channel=4, dst=pColor, time=12)
+// at address 0x940c
+void measureSingleColor(led_t mode, u16 *pColor, u16 *pBlack) {
+  if (mode == LED_RED) {
+    PA_ODR |=  (1 << RED1);
+    PA_ODR |=  (1 << RED2);
+    measureADC_timed(ADC_COLOR, pColor, 12);
 
-    PA_ODR &= ~(1 << RED1)
-    PA_ODR &= ~(1 << RED2)
-    measureADC_timed(channel=4, dst=pBlack, time=4)
+    PA_ODR &= ~(1 << RED1);
+    PA_ODR &= ~(1 << RED2);
+    measureADC_timed(ADC_COLOR, pBlack, 4);
 
-  } else if (mode == 2) {
-    PC_ODR |=  (1 << GREEN1)
-    PA_ODR |=  (1 << GREEN2)
-    measureADC_timed(channel=4, dst=pColor, time=12)
+  } else if (mode == LED_GREEN) {
+    PC_ODR |=  (1 << GREEN1);
+    PA_ODR |=  (1 << GREEN2);
+    measureADC_timed(ADC_COLOR, pColor, 12);
 
-    PC_ODR &= ~(1 << GREEN1)
-    PA_ODR &= ~(1 << GREEN2)
-    measureADC_timed(channel=4, dst=pBlack, time=4)
+    PC_ODR &= ~(1 << GREEN1);
+    PA_ODR &= ~(1 << GREEN2);
+    measureADC_timed(ADC_COLOR, pBlack, 4);
 
-  } else if (mode == 3) {
-    PC_ODR |=  (1 << BLUE1)
-    PC_ODR |=  (1 << BLUE2)
-    measureADC_timed(channel=4, dst=pColor, time=12)
+  } else if (mode == LED_BLUE) {
+    PC_ODR |=  (1 << BLUE1);
+    PC_ODR |=  (1 << BLUE2);
+    measureADC_timed(ADC_COLOR, pColor, 12);
 
-    PC_ODR &= ~(1 << BLUE1)
-    PC_ODR &= ~(1 << BLUE2)
-    measureADC_timed(channel=4, dst=pBlack, time=4)
+    PC_ODR &= ~(1 << BLUE1);
+    PC_ODR &= ~(1 << BLUE2);
+    measureADC_timed(ADC_COLOR, pBlack, 4);
   }
-  return
+}
 
 // at address 0x9493
 void doCalibration(u32 *params) {
@@ -960,7 +971,6 @@ void doCalibration(u32 *params) {
   params[0] = (u32)((409.0f / (float) red  ) * 1000.0f);
   params[1] = (u32)((409.0f / (float) green) * 1000.0f);
   params[2] = (u32)((409.0f / (float) blue ) * 1000.0f);
-  return;
 }
 
 0x9518 LUT1:
@@ -1085,69 +1095,77 @@ u8 importCalibration(u32 *params) {
   return true;
 }
 
-0x9657 measureADC(channel in A, dst in X):
-  ADC_CSR &= 0xF0
-  ADC_CSR |= channel
-  ADC_CSR &= (1 << EOC)
+// at address 0x9657
+void measureADC(adc_channel_t channel, u16 *pDst) {
+  ADC_CSR &= 0xF0;        // unset channel
+  ADC_CSR |= channel;     // set channel
+  ADC_CSR &= (1 << EOC);  // clear end-of-conversion
+  ADC_CSR |= (1 << ADON); // start conversion
 
-  ADC_CSR |= (1 << ADON)
+  // wait until done
   while (!(ADC_CSR & (1 << EOC))) {}
 
-  u8 high = ADC_DRH
-  u8 low  = ADC_DRL
+  u8 high = ADC_DRH;
+  u8 low  = ADC_DRL;
 
-  u16(dst) = (high << 2) | (low & 0x03)
-  return
+  *pDst = (high << 2) | (low & 0x03);
+}
 
-0x96ad adjustRGB(u16* pRed in X, u16* pGreen in Y, u16* pBlue in u16[$00]):
-  *pRed   = (u16)( (float)(*pRed)   * redFactor   )
-  *pGreen = (u16)( (float)(*pGreen) * greenFactor )
-  *pBlue  = (u16)( (float)(*pBlue)  * blueFactor  )
-  return
+// at address 0x96ad
+void adjustRGB(u16* pRed, u16* pGreen, u16* pBlue) {
+  *pRed   = (u16)( (float)(*pRed)   * redFactor   );
+  *pGreen = (u16)( (float)(*pGreen) * greenFactor );
+  *pBlue  = (u16)( (float)(*pBlue)  * blueFactor  );
+}
 
-0x973b uartWrite(ptr in X, len in A, status out A):
-  if (txActive) goto fail
+// at address 0x973b
+tx_status_t uartWrite(u8 *data, u8 length) {
+  if (txActive)
+    return TX_BUSY;
 
-  if (len > 0)
-    memcpy(txBuffer, ptr, len)
+  if (length > 0)
+    memcpy(txBuffer, data, length);
 
-  txTarget = &txBuffer[0]
-  UART1_DR = txBuffer[0]
-  txRemaining = len
+  // prepare circular buffer for transmission
+  txTarget = &txBuffer[0];
+  UART1_DR = txBuffer[0];
+  txRemaining = length;
 
-  if (len >= 2):
-    UART1_CR2 |= (1 << TIEN)
-    txActive = 1
-  A = 1
-  return
-fail:
-  A = 0
-  return
+  // only enable interrupt if there are >1 bytes to send
+  if (length >= 2) {
+    UART1_CR2 |= (1 << TIEN);
+    txActive = 1;
+  }
 
+  return TX_OK;
+}
 
-0x977c measureColorCode(out A):
-  u16 red, green, blue, black
+// at address 0x977c
+color_code_t measureColorCode() {
+  u16 red, green, blue, black;
 
-  measureAllColors(&red, &green, &blue, &black)
-  adjustRGB(&red, &green, &blue)
-  return identifyColor(red, green, blue)
+  measureAllColors(&red, &green, &blue, &black);
+  adjustRGB(&red, &green, &blue);
+  return identifyColor(red, green, blue);
+}
 
-0x97b8 ambient_setup():
-  PA_ODR &= ~(1 << RED1)
-  PA_ODR &= ~(1 << RED2)
-  PA_ODR &= ~(1 << GREEN1)
-  PC_ODR &= ~(1 << GREEN2)
-  PC_ODR &= ~(1 << BLUE1)
-  PC_ODR &= ~(1 << BLUE2)
+// at address 0x97b8
+void ambient_setup() {
+  PA_ODR &= ~(1 << RED1);
+  PA_ODR &= ~(1 << RED2);
+  PA_ODR &= ~(1 << GREEN1);
+  PC_ODR &= ~(1 << GREEN2);
+  PC_ODR &= ~(1 << BLUE1);
+  PC_ODR &= ~(1 << BLUE2);
 
-  PC_DDR |=  (1 << CAP)
-  PC_ODR |=  (1 << CAP)
-  PC_CR1 |=  (1 << CAP)
+  PC_DDR |=  (1 << CAP);
+  PC_ODR |=  (1 << CAP);
+  PC_CR1 |=  (1 << CAP);
 
-  PC_DDR &= ~(1 << BRIGHT)
-  PC_CR1 &= ~(1 << BRIGHT)
-  ambientMode = 1
-  return
+  PC_DDR &= ~(1 << BRIGHT);
+  PC_CR1 &= ~(1 << BRIGHT);
+  ambientMode = AMBIENT_DARK;
+}
 
 // at address 0x97e9
 void saveEeprom(u32 *params) {
@@ -1159,40 +1177,44 @@ void saveEeprom(u32 *params) {
   *((u32*) 0x4008) = params[2];
 
   FLASH_IAPSR &= ~(1 << EOP);
-  return;
 }
 
-0x9869 uart_start:
-  UART1_DIV  = 0x1a0a ; 2400 baud
-  UART1_CR1  = 0x00
-  UART1_CR2  = 1 << TEN
-  UART1_CR2 |= 1 << REN
-  UART1_CR2 |= 1 << RIEN
-  UART1_CR3  = 0
-  call reset_rxbuf
-  rxReadPtr = 0
-  return
+// at address 0x9869
+void uart_start() {
+  UART1_DIV  = 0x1a0a; // 2400 baud
+  UART1_CR1  = 0x00;
+  UART1_CR2  = 1 << TEN;
+  UART1_CR2 |= 1 << REN;
+  UART1_CR2 |= 1 << RIEN;
+  UART1_CR3  = 0x00;
+  reset_rxbuf();
+  rxReadPtr = 0;
+}
 
-0x988d uart_tx_done():
+// at address 0x988d
+void uart_tx_done() {
   if (txRemaining == 0) {
-    UART1_CR2 &= ~TIEN ; disable tx interrupt
-    txActive = 0
-    ireturn
+    UART1_CR2 &= ~TIEN; // disable tx interrupt
+    txActive = 0;
+    return;
   }
-  txRemaining--
+  txRemaining--;
   if (txRemaining != 0) {
-    txTarget++
-    UART1_DR = *txTarget
+    txTarget++;
+    UART1_DR = *txTarget;
   }
-  ireturn
+}
 
-0x98e0 uart_rx_done():
-  *rxTarget = UART1_DR
-  rxTarget++
-  rxWritePtr++
-  if (rxWritePtr == 35)
-    call reset_rxbuf
-  ireturn
+
+// at address 0x98e0
+void uart_rx_done() {
+  *rxTarget = UART1_DR;
+  rxTarget++;
+  rxWritePtr++;
+  if (rxWritePtr == 35) {
+    reset_rxbuf();
+  }
+}
 
 // at address 0x98fd
 void loadEeprom(u32 *params) {
@@ -1200,103 +1222,120 @@ void loadEeprom(u32 *params) {
   params[1] = *((u32*) 0x4004);
   params[2] = *((u32*) 0x4008);
   eepromPtr = (u32*) 0x4008; // unused
-  return;
 }
 
-setup_tick():
-  CLK_CKDIVR = 0 ; HSI clock = CPU clock = master clock = 16 MHz
-  TIM2_CR1   = 1 ; ARPE = 0: do not buffer ARR
-                 ; OPM  = 0: do not stop on update
-                 ; URS  = 0: enable external update request sources (?)
-                 ; UDIS = 0: do not disable update event
-                 ; CEN  = 1: enable timer
-  TIM2_IER   = 1 ; enable only overflow/update interrupt
-  TIM2_PSCR  = 0 ; run at master clock
-  TIM2_ARR   = 16000 ; 1 ms tick
-  unmask_interrupts()
-  return
+// at address 0x991a
+void setup_tick() {
+  CLK_CKDIVR = 0; // HSI clock = CPU clock = master clock = 16 MHz
+  TIM2_CR1   = 1;
+    // ARPE = 0: do not buffer ARR
+    // OPM  = 0: do not stop on update
+    // URS  = 0: enable external update request sources (?)
+    // UDIS = 0: do not disable update event
+    // CEN  = 1: enable timer
+  TIM2_IER   = 1;     // enable only overflow/update interrupt
+  TIM2_PSCR  = 0;     // run at master clock
+  TIM2_ARR   = 16000; // 1 ms tick
+  asm("rim"); // unmask interrupts
+}
 
+// at address 0x9934
+void wdg_setup() {
+  IWDG_KR  = KEY_ENABLE;
+  IWDG_KR  = KEY_ACCESS;
+  IWDG_PR  = 0x06; // /256 prescaler => 250 Hz clock
+  IWDG_RLR = 0xFF; // ~ 1 second timeout
+  IWDG_KR  = KEY_REFRESH;
+  IWDG_KR  = KEY_ENABLE;
+}
 
-0x9934 wdg_setup():
-  IWDG_KR  = KEY_ENABLE
-  IWDG_KR  = KEY_ACCESS
-  IWDG_PR  = 0x06 ; /256 prescaler => 250 Hz clock
-  IWDG_RLR = 0xFF ; ~ 1 second timeout
-  IWDG_KR  = KEY_REFRESH
-  IWDG_KR  = KEY_ENABLE
-  return
+// at forgotten address
+// (however this function is synthesized from sub-functions anyway)
+void init_memory() {
+  memset(0x0013, 0x00, 154);
+  lastColor = 0xFF;
+  mainState = 0x02;
+  initState = 0x01;
+}
 
-void init_memory():
-  memset(at 0x0013, 0x00, 154 bytes)
-  lastColor = 0xFF
-  mainState = 0x02
-  initState = 0x01
-
-
-0x9964 analog_setup():
+// at address 0x9964
+void analog_setup() {
   u32 params[3];
 
-  call wdg_setup()
-  call adc_setup()
+  wdg_setup();
+  adc_setup();
   loadEeprom(params);
   importCalibration(params);
-  return
+}
 
-0x9979 adc_setup():
-  ADC_CSR &= 0xF0
-  ADC_CSR |= AIN4
-  ADC_CSR &= ~(1 << EOC)
-  ADC_CR1 |=  (1 << ADON)
-  return
+// at address 0x9979
+void adc_setup() {
+  ADC_CSR &= 0xF0; // reset channel
+  ADC_CSR |= AIN4; // set channel to color
+  ADC_CSR &= ~(1 << EOC);  // clear end of conversion
+  ADC_CR1 |=  (1 << ADON); // start dummy conversion
+}
 
-0x99dc startup():
-  SP = 0x03FF
-  init_memory()
-  mainloop()
-  abort_with_errorcode(X)
+// at address 0x99dc
+void startup() {
+  register u16 stackPointer asm ("SP");
+  stackPointer = 0x03ff;
 
-0x99ef enter_high_baudrate(out A):
-  if (txActive) return false
+  init_memory();
+  mainloop();
+  abort();
+}
 
-  UART1_DIV = 0x115 ; 57600 baud
-  return true
+// at address 0x99ef
+tx_status_t enter_high_baudrate() {
+  if (txActive)
+    return TX_BUSY;
 
+  UART1_DIV = 0x115; // 57600 baud
+  return TX_OK;
+}
 
-0x9a01 color_setup():
-  PC_DDR &= ~(1 << CAP)
-  PC_CR1 &= ~(1 << CAP)
-  PC_DDR &= ~(1 << BRIGHT)
-  PC_CR1 &= ~(1 << BRIGHT)
-  return
+// at address 0x9a01
+void color_setup() {
+  PC_DDR &= ~(1 << CAP);
+  PC_CR1 &= ~(1 << CAP);
+  PC_DDR &= ~(1 << BRIGHT);
+  PC_CR1 &= ~(1 << BRIGHT);
+}
 
-0x9a12 uart_setup():
-  setup_uart_tx_pins()
-  PD_DDR &= ~(1 << UART_RX)
-  PD_CR1 &= ~(1 << UART_RX)
-  PD_CR2 &= ~(1 << UART_RX)
-  return
+// at address 0x9a12
+void uart_setup() {
+  setup_uart_tx_pins();
+  PD_DDR &= ~(1 << UART_RX);
+  PD_CR1 &= ~(1 << UART_RX);
+  PD_CR2 &= ~(1 << UART_RX);
+}
 
-0x9a22 us10_tick():
-  TIM1_SR1 &= ~UIF
-  us10Counter++
-  ireturn
+// at address 0x9a22
+void us10_tick() {
+  TIM1_SR1 &= ~UIF;
+  us10Counter++;
+}
 
-0x9a2f setup_uart_tx_pins():
-  PD_DDR |=  (1 << UART_TX)
-  PD_ODR &= ~(1 << UART_TX)
-  PD_CR1 |=  (1 << UART_TX)
-  return
+// at address 0x9a2f
+void setup_uart_tx_pins() {
+  PD_DDR |=  (1 << UART_TX);
+  PD_ODR &= ~(1 << UART_TX);
+  PD_CR1 |=  (1 << UART_TX);
+}
 
-0x9a48 ms_tick():
-  TIM2_SR1 &= ~UIF
-  msCounter++
-  ireturn
+// at address 0x9a48
+void ms_tick() {
+  TIM2_SR1 &= ~UIF;
+  msCounter++;
+}
 
-0x9a54 main_init1():
-  setup_tick()
-  gpio_setup()
-  analog_setup()
-  return
+// at address 0x9a54
+void main_init1() {
+  setup_tick();
+  gpio_setup();
+  analog_setup();
+}
 
 
 0x9bb7 data: 40 1d a2          ; this is 29 = EV3 Color sensor
@@ -1336,31 +1375,39 @@ void init_memory():
 0x9b1b data: 9d 03 00 00 00 00 00 ff 7f 47 a6 ; si  limits
 0x9b83 data: 95 80 04 01 05 00 ea             ; 4 values, s16, 5 figures, 0 decimals
 
+// at address 0x9b26
+void reset_rxbuf() {
+  rxTarget = &rxBuffer[0];
+  rxWritePtr = 0;
+}
 
-0x9b26 reset_rxbuf():
-  rxTarget = &rxBuffer[0]
-  rxWritePtr = 0
-  return
-
-0x9b31 mainloop():
-  main_init1()
-  uart_setup()
+// at address 0x9b31
+void mainloop() {
+  main_init1();
+  uart_setup();
   while (true)
-    stateMachine()
+    stateMachine();
+}
 
-0x9b50 uart_disable():
-  UART1_CR1 |= (1 << UARTD) ; disable uart
-  setup_uart_tx_pins()
-  return
+// at address 0x9b50
+void uart_disable() {
+  UART1_CR1 |= (1 << UARTD); // disable uart
+  setup_uart_tx_pins();
+}
 
-0x9ba9 wdg_refresh():
-  IWDG_KR = KEY_REFRESH
-  return
+// at address 0x9ba9
+void wdg_refresh() {
+  IWDG_KR = KEY_REFRESH;
+}
 
-0x9bba bad_irq():
-  while(true) { nop() }
+// at address 0x9bba
+void bad_irq() {
+  while (true) {
+    asm("nop");
+  }
+}
 
-0x9bae abort_with_errorcode(X):
-  push(X)
-  pop(X)
+// at address 0x9bae
+void abort() {
   while(true) {}
+}

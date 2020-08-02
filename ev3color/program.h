@@ -90,9 +90,9 @@ typedef enum {
 
 // led mode for measurement
 typedef enum {
-  LED_RED   = 0,
-  LED_GREEN = 1,
-  LED_BLUE  = 2,
+  LED_RED   = 1,
+  LED_GREEN = 2,
+  LED_BLUE  = 3,
 } led_t;
 
 // ambient mode for measurement
@@ -100,6 +100,24 @@ typedef enum {
   AMBIENT_DARK   = 1,
   AMBIENT_BRIGHT = 2,
 } ambient_mode_t;
+
+// ADC channel for measurements
+typedef enum {
+  ADC_AMBIENT = 3, // AIN3
+  ADC_COLOR   = 4, // AIN4
+} adc_channel_t;
+
+// EV3 color code
+typedef enum {
+  COLOR_NONE   = 0,
+  COLOR_BLACK  = 1,
+  COLOR_BLUE   = 2,
+  COLOR_GREEN  = 3,
+  COLOR_YELLOW = 4,
+  COLOR_RED    = 5,
+  COLOR_WHITE  = 6,
+  COLOR_BROWN  = 7,
+} color_code_t;
 
 // transmission result
 typedef enum {
