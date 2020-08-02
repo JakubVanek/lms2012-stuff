@@ -35,7 +35,7 @@ u16 *txTarget     @ [$96]
 u16 *rxTarget     @ [$98]
 u32 *eepromPtr    @ [$9a] ; never read
 u16  msCounter    @ [$9c]
-u8   firstSend    @ [$9e]
+u8   forceSend    @ [$9e]
 u8   calAuthOk    @ [$9f]
 u8   lastAmbient  @ [$a0]
 u8   lastReflect  @ [$a1]
@@ -470,14 +470,14 @@ void stateMachine() {
     case STATE_COLORID_SETUP: {
       color_setup();
       mainState = STATE_COLORID_RUNNING;
-      firstSend = true;
+      forceSend = true;
       break;
     }
 
     // do measurements in COL-COLOR mode
     case STATE_COLORID_RUNNING: {
       u8 newColor = measureColorCode();
-      if (newColor != lastColor || firstSend) {
+      if (newColor != lastColor || forceSend) {
 
         lastColor = newColor;
         transmit[0] = 0xC2;
@@ -485,7 +485,7 @@ void stateMachine() {
         transmit[2] = transmit[0] ^ transmit[1] ^ 0xFF;
 
         if (uartWrite(transmit, 3) == TX_OK) {
-          firstSend = false;
+          forceSend = false;
         }
       }
       break;
@@ -495,14 +495,14 @@ void stateMachine() {
     case STATE_REFLECT_SETUP: {
       color_setup();
       mainState = STATE_REFLECT_RUNNING;
-      firstSend = true;
+      forceSend = true;
       break;
     }
 
     // do measurements in COL-REFLECT mode
     case STATE_REFLECT_RUNNING: {
       u8 newReflect = measureReflectivity(LED_RED);
-      if (newReflect != lastReflect || firstSend) {
+      if (newReflect != lastReflect || forceSend) {
 
         lastReflect = newReflect;
         transmit[0] = 0xC0;
@@ -510,7 +510,7 @@ void stateMachine() {
         transmit[2] = transmit[0] ^ transmit[1] ^ 0xFF;
 
         if (uartWrite(transmit, 3) == TX_OK) {
-          firstSend = false;
+          forceSend = false;
         }
       }
       break;
@@ -520,14 +520,14 @@ void stateMachine() {
     case STATE_AMBIENT_SETUP: {
       ambient_setup();
       mainState = STATE_AMBIENT_RUNNING;
-      firstSend = true;
+      forceSend = true;
       break;
     }
 
     // do measurements in COL-AMBIENT mode
     case STATE_AMBIENT_RUNNING: {
       u8 newAmbient = measureAmbient();
-      if (newAmbient != lastAmbient || firstSend) {
+      if (newAmbient != lastAmbient || forceSend) {
 
         lastAmbient = newAmbient;
         transmit[0] = 0xC1;
@@ -535,7 +535,7 @@ void stateMachine() {
         transmit[2] = transmit[0] ^ transmit[1] ^ 0xFF;
 
         if (uartWrite(transmit, 3) == TX_OK) {
-          firstSend = false;
+          forceSend = false;
         }
       }
       break;
@@ -545,7 +545,7 @@ void stateMachine() {
     case STATE_REFRAW_SETUP: {
       color_setup();
       mainState = STATE_REFRAW_RUNNING;
-      firstSend = true;
+      forceSend = true;
       break;
     }
 
@@ -554,7 +554,7 @@ void stateMachine() {
       u16 reflect, background;
       measureSingleColor(LED_RED, &reflect, &background);
 
-      if (reflect != lastRefRawFg || reflect != lastRefRawBg || firstSend) {
+      if (reflect != lastRefRawFg || reflect != lastRefRawBg || forceSend) {
         lastRefRawFg = reflect;
         lastRefRawBg = background;
 
@@ -566,7 +566,7 @@ void stateMachine() {
         transmit[5] = transmit[0] ^ transmit[1] ^ transmit[2] ^ transmit[3] ^ transmit[4] ^ 0xFF;
 
         if (uartWrite(transmit, 6) == TX_OK) {
-          firstSend = false;
+          forceSend = false;
         }
       }
       break;
@@ -576,7 +576,7 @@ void stateMachine() {
     case STATE_RGBRAW_SETUP: {
       color_setup();
       mainState = STATE_RGBRAW_RUNNING;
-      firstSend = true;
+      forceSend = true;
       break;
     }
 
@@ -585,7 +585,7 @@ void stateMachine() {
       u16 red, green, blue, background;
       measureAllColors(&red, &green, &blue, &background);
 
-      if (red != lastRefRgbR || green != lastRefRgbG || blue != lastRefRgbB || firstSend) {
+      if (red != lastRefRgbR || green != lastRefRgbG || blue != lastRefRgbB || forceSend) {
         lastRefRgbR = red;
         lastRefRgbG = green;
         lastRefRgbB = blue;
@@ -607,7 +607,7 @@ void stateMachine() {
                       0xFF;                       // instead it contains the old check byte
 
         if (uartWrite(transmit, 10) == TX_OK) {
-          firstSend = false;
+          forceSend = false;
         }
       }
       break;
@@ -679,7 +679,7 @@ switchEnd:
 
   if (received[0] == MSG_NACK) {
     wdg_refresh();
-    firstSend = true;
+    forceSend = true;
     return;
   }
 
