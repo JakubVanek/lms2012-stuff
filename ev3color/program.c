@@ -17,7 +17,7 @@ u8   calleeSavedRegs[8] @ [$08]
 ; real variables
 u8   lastColor    @ [$10]
 u8   mainState    @ [$11]
-u8   hShakeState  @ [$12]
+u8   initState    @ [$12]
 u8   rxBuffer[35] @ [$13]
 u8   txBuffer[35] @ [$36]
 u8   frame[35]    @ [$59]
@@ -30,7 +30,7 @@ u16  lastRefRgbR  @ [$8c]
 u16  lastRefRgbG  @ [$8e]
 u16  lastRefRgbB  @ [$90]
 u16  lastMsTick   @ [$92]
-u16  loopCounter  @ [$94]
+u16  eventTimer   @ [$94]
 u16 *txTarget     @ [$96]
 u16 *rxTarget     @ [$98]
 u32 *eepromPtr    @ [$9a] ; never read
@@ -41,7 +41,8 @@ u8   lastAmbient  @ [$a0]
 u8   lastReflect  @ [$a1]
 u8   pauseCounter @ [$a2]
 u8   syncAttempts @ [$a3]
-u16  us10Counter  @ [$a4]
+u8   us10Counter  @ [$a4]
+u8   ambientMode  @ [$a5]
 u8   txRemaining  @ [$a6]
 u8   txActive     @ [$a7]
 u8   rxWritePtr   @ [$a8]
@@ -64,13 +65,12 @@ code
 0x8092 loop():
   SP -= 0x61
 
-  u16(SP+0x31) = msCounter
-  if (u16(SP+0x31) == u16[$92])
+  u16 currentMs = msCounter
+  if (currentMs == lastMsTick)
     goto switchEnd
-  u16[$92] = u16(SP+0x31)
-  u16[$94]++
-  X = u16[$94]
-  A = u8[$11]
+  lastMsTick = currentMs
+  eventTimer++
+  A = mainState
   if (A ==  1) goto $8106 ; UART restart
   if (A ==  2) goto $8110 ; UART start
   if (A ==  3) goto $8131 ; UART handshake
@@ -91,25 +91,25 @@ code
 0x8106:
 ; CASE A=1: restart UART
   uart_disable()
-  u8[$11] = 2
-  u16[$94] = 0
+  mainState = 2
+  eventTimer = 0
   goto switchEnd
 
 0x8110:
 ; CASE A=2: wait for UART start
-  if (X >= 501) {
+  if (eventTimer >= 501) {
     uart_start()
-    u16[$94] = 0
-    u8[$a3] = 0
-    u8[$11] = 3
-    u8[$12] = 2
+    eventTimer = 0
+    syncAttempts = 0
+    mainState = 3
+    initState = 2
     wdg_refresh()
   }
   goto switchEnd
 
 ; CASE A=3: uart handshake
 0x8131:
-  A = u8[$12]
+  A = initState
   if (A ==  1) goto $8227
   if (A ==  2) goto $8252
   if (A ==  3) goto $826e
@@ -154,14 +154,14 @@ code
 
 
 0x8227: ; sstate 1, receiver will transition this to 2
-  if (X >= 7) {
+  if (eventTimer >= 7) {
     u8(SP+1) = 0x00 ; SYNC byte
     if (uartWrite(src=SP+1, len=1)) {
-      u16[$94] = 0
-      u8[$a3]++
+      eventTimer = 0
+      syncAttempts++
     }
-    if (u8[$a3] >= 11) {
-      u8[$11] = 1
+    if (syncAttempts >= 11) {
+      mainState = 1
     }
   }
   goto switchEnd
@@ -169,251 +169,251 @@ code
 0x8252: ; sstate 2
   memcpy(SP+1, 0x9bb7, 3)
   if (uartWrite(src=SP+1, len=3))
-    u8[$12] = 3
+    initState = 3
   goto switchEnd
 
 0x826e: ; sstate 3
   memcpy(SP+1, 0x9bb3, 4)
   if (uartWrite(src=SP+1, len=4))
-    u8[$12] = 4
+    initState = 4
   goto switchEnd
 
 0x828a: ; sstate 4
   memcpy(SP+1, 0x9b98, 6)
   if (uartWrite(src=SP+1, len=6))
-    u8[$12] = 5
+    initState = 5
   goto switchEnd
 
 0x82a6: ; sstate 5
   wdg_refresh()
   memcpy(SP+1, 0x9b05, 11)
   if (uartWrite(src=SP+1, len=11))
-    u8[$12] = 6
+    initState = 6
   goto switchEnd
 
 0x82c3: ; sstate 6
   memcpy(SP+1, 0x9b10, 11)
   if (uartWrite(src=SP+1, len=11))
-    u8[$12] = 7
+    initState = 7
   goto switchEnd
 
 0x82dd: ; sstate 7
   memcpy(SP+1, 0x9b1b, 11)
   if (uartWrite(src=SP+1, len=11))
-    u8[$12] = 8
+    initState = 8
   goto switchEnd
 
 0x82f7: ; sstate 8
   memcpy(SP+1, 0x9b83, 7)
   if (uartWrite(src=SP+1, len=7)) {
-    u8[$12] = 9
-    u8[$a2] = 0
+    initState = 9
+    pauseCounter = 0
   }
   goto switchEnd
 
 0x8313: ; sstate 9
-  if (++u8[$a2] >= 31)
-    u8[$12] = 10
+  if (++pauseCounter >= 31)
+    initState = 10
   goto switchEnd
 
 0x8322: ; sstate 10
   wdg_refresh()
   memcpy(SP+1, 0x9ae4, 11)
   if (uartWrite(src=SP+1, len=11))
-    u8[$12] = 11
+    initState = 11
   goto switchEnd
 
 0x833f: ; sstate 11
   memcpy(SP+1, 0x9aef, 11)
   if (uartWrite(src=SP+1, len=11))
-    u8[$12] = 12
+    initState = 12
   goto switchEnd
 
 0x8359: ; sstate 12
   memcpy(SP+1, 0x9afa, 11)
   if (uartWrite(src=SP+1, len=11))
-    u8[$12] = 13
+    initState = 13
   goto switchEnd
 
 0x8373: ; sstate 13
   memcpy(SP+1, 0x9b7c, 7)
   if (uartWrite(src=SP+1, len=7)) {
-    u8[$12] = 14
-    u8[$a2] = 0
+    initState = 14
+    pauseCounter = 0
   }
   goto switchEnd
 
 0x838f: ; sstate 14
-  if (++u8[$a2] >= 31)
-    u8[$12] = 15
+  if (++pauseCounter >= 31)
+    initState = 15
   goto switchEnd
 
 0x839e: ; sstate 15
   wdg_refresh()
   memcpy(SP+1, 0x9ac3, 11)
   if (uartWrite(src=SP+1, len=11))
-    u8[$12] = 16
+    initState = 16
   goto switchEnd
 
 0x83bb: ; sstate 16
   memcpy(SP+1, 0x9ace, 11)
   if (uartWrite(src=SP+1, len=11))
-    u8[$12] = 17
+    initState = 17
   goto switchEnd
 
 0x83d5: ; sstate 17
   memcpy(SP+1, 0x9ad9, 11)
   if (uartWrite(src=SP+1, len=11))
-    u8[$12] = 18
+    initState = 18
   goto switchEnd
 
 0x83f4: ; sstate 18
   memcpy(SP+1, 0x9b75, 7)
   if (uartWrite(src=SP+1, len=7)) {
-    u8[$12] = 19
-    u8[$a2] = 0
+    initState = 19
+    pauseCounter = 0
   }
   goto switchEnd
 
 0x8413: ; sstate 19
-  if (++u8[$a2] >= 31)
-    u8[$12] = 20
+  if (++pauseCounter >= 31)
+    initState = 20
   goto switchEnd
 
 0x8422: ; sstate 20
   wdg_refresh()
   memcpy(SP+1, 0x99c9, 19)
   if (uartWrite(src=SP+1, len=19))
-    u8[$12] = 21
+    initState = 21
   goto switchEnd
 
 0x8444: ; sstate 21
   memcpy(SP+1, 0x9aa2, 11)
   if (uartWrite(src=SP+1, len=11))
-    u8[$12] = 22
+    initState = 22
   goto switchEnd
 
 0x8463: ; sstate 22
   memcpy(SP+1, 0x9aad, 11)
   if (uartWrite(src=SP+1, len=11))
-    u8[$12] = 23
+    initState = 23
   goto switchEnd
 
 0x8482: ; sstate 23
   memcpy(SP+1, 0x9ab8, 11)
   if (uartWrite(src=SP+1, len=11))
-    u8[$12] = 24
+    initState = 24
   goto switchEnd
 
 0x84a1: ; sstate 24
   memcpy(SP+1, 0x9b6e, 7)
   if (uartWrite(src=SP+1, len=7)) {
-    u8[$12] = 25
-    u8[$a4] = 0
+    initState = 25
+    pauseCounter = 0
   }
   goto switchEnd
 
 0x84c0: ; sstate 25
-  if (++u8[$a2] >= 31)
-    u8[$12] = 26
+  if (++pauseCounter >= 31)
+    initState = 26
   goto switchEnd
 
 0x84cf: ; sstate 26
   wdg_refresh()
   memcpy(SP+1, 0x99b6, 19)
   if (uartWrite(src=SP+1, len=19))
-    u8[$12] = 27
+    initState = 27
   goto switchEnd
 
 0x84f1: ; sstate 27
   memcpy(SP+1, 0x9a81, 11)
   if (uartWrite(src=SP+1, len=11))
-    u8[$12] = 28
+    initState = 28
   goto switchEnd
 
 0x8510: ; sstate 28
   memcpy(SP+1, 0x9a8c, 11)
   if (uartWrite(src=SP+1, len=11))
-    u8[$12] = 29
+    initState = 29
   goto switchEnd
 
 0x852f: ; sstate 29
   memcpy(SP+1, 0x9a97, 11)
   if (uartWrite(src=SP+1, len=11))
-    u8[$12] = 30
+    initState = 30
   goto switchEnd
 
 0x854e: ; sstate 30
   memcpy(SP+1, 0x9b67, 7)
   if (uartWrite(src=SP+1, len=7)) {
-    u8[$12] = 31
-    u8[$a2] = 0
+    initState = 31
+    pausecounter = 0
   }
   goto switchEnd
 
 0x856d: ; sstate 31
-  if (++u8[$a2] >= 31)
-    u8[$12] = 32
+  if (++pauseCounter >= 31)
+    initState = 32
   goto switchEnd
 
 0x857c: ; sstate 32
   wdg_refresh()
   memcpy(SP+1, 0x99a3, 19)
   if (uartWrite(src=SP+1, len=19))
-    u8[$12] = 33
+    initState = 33
   goto switchEnd
 
 0x859e: ; sstate 33
   memcpy(SP+1, 0x9a60, 11)
   if (uartWrite(src=SP+1, len=11))
-    u8[$12] = 34
+    initState = 34
   goto switchEnd
 
 0x85bd: ; sstate 34
   memcpy(SP+1, 0x9a6b, 11)
   if (uartWrite(src=SP+1, len=11))
-    u8[$12] = 35
+    initState = 35
   goto switchEnd
 
 0x85dc: ; sstate 35
   memcpy(SP+1, 0x9a76, 11)
   if (uartWrite(src=SP+1, len=11))
-    u8[$12] = 36
+    initState = 36
   goto switchEnd
 
 0x85fb: ; sstate 36
   memcpy(SP+1, 0x9b60, 7)
   if (uartWrite(src=SP+1, len=7)) {
-    u8[$12] = 37
-    u8[$a2] = 0
+    initState = 37
+    pauseCounter = 0
   }
   goto switchEnd
 
 0x861e: ; sstate 37
-  if (++u8[$a2] >= 31)
-    u8[$12] = 38
+  if (++pauseCounter >= 31)
+    initState = 38
   goto switchEnd
 
 0x862d: ; sstate 38
   frameLength = 0
   u8(SP+1) = 0x04 ; ACK
   if (uartWrite(src=SP+1, len=1)) {
-    u8[$12] = 39
-    u16[$94] = 0
+    initState = 39
+    eventTimer = 0
   }
   goto switchEnd
 
 0x864a: ; sstate 39, receiver will transition this to 40
-  if (X >= 81) {
-    u8[$11] = 1
+  if (eventTimer >= 81) {
+    mainState = 1
   }
   goto switchEnd
 
 0x8659: ; sstate 40
   if (enter_high_baudrate()) {
     wdg_refresh()
-    u8[$12] = 1
-    u8[$11] = 6
+    initState = 1
+    mainState = 6
   }
   goto switchEnd
 ; end of setup
@@ -422,18 +422,18 @@ code
 ; CASE A=4 - COL-COLOR setup
 0x8671:
   color_setup()
-  u8[$11] = 5
+  mainState = 5
   firstSend = 1
   goto switchEnd
 
 ; CASE A=5 - COL-COLOR reading
 0x867b:
   u8[$00] = measureColorCode()
-  if (u8[$10] != u8[$00]) goto send_col_color
+  if (lastColor != u8[$00]) goto send_col_color
   if (firstSend == 1      ) goto send_col_color
   goto switchEnd
 send_col_color:
-  u8[$10]  = u8[$00]
+  lastColor = u8[$00]
   u8(SP+1) = 0xC2
   u8(SP+2) = u8[$00]
   u8(SP+3) = 0xC2 ^ u8[$00] ^ 0xFF
@@ -445,18 +445,18 @@ send_col_color:
 ; CASE A=6 - COL-REFLECT setup
 0x86a0:
   color_setup()
-  u8[$11] = 7
+  mainState = 7
   firstSend = 1
   goto switchEnd
 
 ; CASE A=7 - COL-REFLECT reading
 0x86aa:
   u8[$00] = measureReflectivity(channel=1)
-  if (u8[$a1] != u8[$00]) goto send_col_reflect
-  if (firstSend == 1      ) goto send_col_reflect
+  if (u8[$00]   != lastReflect) goto send_col_reflect
+  if (firstSend == 1          ) goto send_col_reflect
   goto switchEnd
 send_col_reflect:
-  u8[$a1]  = u8[$00]
+  lastReflect = u8[$00]
   u8(SP+1) = 0xC0
   u8(SP+2) = u8[$00]
   u8(SP+3) = 0xC0 ^ u8[$00] ^ 0xFF
@@ -468,18 +468,18 @@ send_col_reflect:
 ; CASE A=8 - COL-AMBIENT setup
 0x86d1:
   ambient_setup()
-  u8[$11] = 9
+  mainState = 9
   firstSend = 1
   goto switchEnd
 
 ; CASE A=9 - COL-AMBIENT reading
 0x86db:
   u8[$00] = measureAmbient()
-  if (u8[$00] != u8[$a0]) goto send_col_ambient
-  if (firstSend == 1      ) goto send_col_ambient
+  if (u8[$00] != lastAmbient) goto send_col_ambient
+  if (firstSend == 1        ) goto send_col_ambient
   goto switchEnd
 send_col_ambient:
-  u8[$a0]  = u8[$00]
+  lastAmbient = u8[$00]
   u8(SP+1) = 0xC1
   u8(SP+2) = u8[$00]
   u8(SP+3) = 0xC1 ^ u8[$00] ^ 0xFF
@@ -491,20 +491,20 @@ send_col_ambient:
 ; CASE A=10 - REF-RAW setup
 0x8705:
   color_setup()
-  u8[$11] = 11
+  mainState = 11
   firstSend = 1
   goto switchEnd
 
 ; CASE A=11 - REF-RAW reading
 0x870e: ; measure reflectivity
   measureSingleColor(mode=1, pColor=SP+0x2C, pBlack=SP+0x2A)
-  if (u16(SP+0x2c) != u16[$88]) goto send_ref_raw
-  if (u16(SP+0x2a) != u16[$8a]) goto send_ref_raw
-  if (firstSend      == 1       ) goto send_ref_raw
+  if (u16(SP+0x2c) != lastRefRawFg) goto send_ref_raw
+  if (u16(SP+0x2a) != lastRefRawBg) goto send_ref_raw
+  if (firstSend    == 1           ) goto send_ref_raw
   goto switchEnd
 send_ref_raw:
-  u16[$88] = u16(SP+0x2c)
-  u16[$8a] = u16(SP+0x2a)
+  lastRefRawFg = u16(SP+0x2c)
+  lastRefRawBg = u16(SP+0x2a)
   u8(SP+1) = 0xD3
   u8(SP+2) = u8(SP+0x2d)
   u8(SP+3) = u8(SP+0x2c)
@@ -519,22 +519,22 @@ send_ref_raw:
 ; CASE A=12 - RGB-RAW setup
 0x8771:
   color_setup()
-  u8[$11] = 13
+  mainState = 13
   firstSend = 1
   goto switchEnd
 
 ; CASE A=13 - RGB-RAW reading
 0x877f: ; measure rgb
   measureAllColors(pRed=SP+0x28, pGreen=SP+0x26, pBlue=SP+0x24, pBlack=SP+0x2e)
-  if (u16(SP+0x28) != u16[$8c]) goto send_rgb_raw
-  if (u16(SP+0x26) != u16[$8e]) goto send_rgb_raw
-  if (u16(SP+0x24) != u16[$90]) goto send_rgb_raw
-  if (firstSend      == 1       ) goto send_rgb_raw
+  if (u16(SP+0x28) != lastRefRgbR) goto send_rgb_raw
+  if (u16(SP+0x26) != lastRefRgbG) goto send_rgb_raw
+  if (u16(SP+0x24) != lastRefRgbB) goto send_rgb_raw
+  if (firstSend    == 1          ) goto send_rgb_raw
   goto switchEnd
 send_rgb_raw:
-  u16[$8c] = u16(SP+0x28)
-  u16[$8e] = u16(SP+0x26)
-  u16[$90] = u16(SP+0x24)
+  lastRefRgbR = u16(SP+0x28)
+  lastRefRgbG = u16(SP+0x26)
+  lastRefRgbB = u16(SP+0x24)
   u8(SP+1) = 0xDC
   u8(SP+2) = u8(SP+0x29)
   u8(SP+3) = u8(SP+0x28)
@@ -568,7 +568,7 @@ send_rgb_raw:
   u8(SP+9) = 0x00
   u8(SP+10) = 0xDD ^ 0xFF
   if (uartWrite(src=SP+1, len=10)) {
-    u8[$11] = 15
+    mainState = 15
   }
   goto switchEnd
 
@@ -597,7 +597,7 @@ send_rgb_raw:
                    ^ 0xFF
   if (uartWrite(src=SP+1, len=10)) {
     calAuthOk = 0
-    u8[$11] = 16
+    mainState = 16
   }
   goto switchEnd
 
@@ -615,7 +615,7 @@ switchEnd:
     goto exit
   }
 
-  A = u8[$11]
+  A = mainState
   if (A ==  3) goto sw2case1 ; handshake
   if (A ==  5) goto sw2case2 ; COL-COLOR
   if (A ==  7) goto sw2case2 ; COL-REFLECT
@@ -626,30 +626,30 @@ switchEnd:
   goto exit
 
 sw2case1:
-  if (u8[$12] == 0x01) {
+  if (initState == 0x01) {
     if (u8(SP+0x3F) == 0x00) ; SYNC
-      u8[$12] = 2
+      initState = 2
     goto exit
   }
-  if (u8[$12] == 0x27) {
+  if (initState == 0x27) {
     if (u8(SP+0x3F) == 0x04) ; ACK
-      u8[$12] = 0x28
+      initState = 0x28
   }
   goto exit
 
 sw2case2:
   if (u8(SP+0x3f) != 0x43) goto notSelect
-  if (u8(SP+0x40) == 0   ) u8[$11] =  6
-  if (u8(SP+0x40) == 1   ) u8[$11] =  8
-  if (u8(SP+0x40) == 2   ) u8[$11] =  4
-  if (u8(SP+0x40) == 3   ) u8[$11] = 10
-  if (u8(SP+0x40) == 4   ) u8[$11] = 12
-  if (u8(SP+0x40) == 5   ) u8[$11] = 14
+  if (u8(SP+0x40) == 0   ) mainState =  6
+  if (u8(SP+0x40) == 1   ) mainState =  8
+  if (u8(SP+0x40) == 2   ) mainState =  4
+  if (u8(SP+0x40) == 3   ) mainState = 10
+  if (u8(SP+0x40) == 4   ) mainState = 12
+  if (u8(SP+0x40) == 5   ) mainState = 14
   goto exit
 
 notSelect:
   if (!(u8(SP+0x3f) & 0x44)) goto exit
-  if (u8[$11]     != 15)     goto exit
+  if (mainState     != 15)     goto exit
   if (u8(SP+0x40) != 'L')    goto exit
   if (u8(SP+0x41) != 'E')    goto exit
   if (u8(SP+0x42) != 'G')    goto exit
@@ -924,12 +924,12 @@ exit:
   u16 measurement
   measureADC(channel=3, dst=&measurement)
 
-  if (u8[$a5] == 1) {
+  if (ambientMode == 1) {
     if (measurement >= 801) {
       PC_DDR |=  (1 << BRIGHT)
       PC_ODR &= ~(1 << BRIGHT)
       PC_CR1 |=  (1 << BRIGHT)
-      u8[$a5] = 2
+      ambientMode = 2
     }
 
     for (A = 0, A <= 60, A++) {
@@ -938,11 +938,11 @@ exit:
       brightness = A ; possible off-by-one error
     }
 
-  } else if (u8[$a5] == 2) {
+  } else if (ambientMode == 2) {
     if (measurement < 15) {
       PC_DDR &= ~(1 << BRIGHT)
       PC_CR1 &= ~(1 << BRIGHT)
-      u8[$a5] = 1
+      ambientMode = 1
     }
 
     for (A = 0, A <= 50, A++) {
@@ -1203,7 +1203,7 @@ fail:
 
   PC_DDR &= ~(1 << BRIGHT)
   PC_CR1 &= ~(1 << BRIGHT)
-  u8[$a5] = 1
+  ambientMode = 1
   return
 
 0x97e9 eeprom_store(buf):
@@ -1280,9 +1280,9 @@ setup_tick():
 
 void init_memory():
   memset(at 0x0013, 0x00, 154 bytes)
-  u8[$10] = 0xFF
-  u8[$11] = 0x02
-  u8[$12] = 0x01
+  lastColor = 0xFF
+  mainState = 0x02
+  initState = 0x01
 
 
 0x9964 analog_setup():
