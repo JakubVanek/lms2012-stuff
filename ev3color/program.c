@@ -115,8 +115,8 @@ typedef enum {
 
 void stateMachine() {
   u16 currentMs = msCounter;
-  u8 rxBuffer[?];
-  u8 txBuffer[?];
+  u8 receive[?];
+  u8 transmit[?];
 
   if (currentMs == lastMsTick)
     goto switchEnd;
@@ -474,11 +474,11 @@ void stateMachine() {
       if (newColor != lastColor || firstSend) {
 
         lastColor = newColor;
-        txBuffer[0] = 0xC2;
-        txBuffer[1] = newColor;
-        txBuffer[2] = txBuffer[0] ^ txBuffer[1] ^ 0xFF;
+        transmit[0] = 0xC2;
+        transmit[1] = newColor;
+        transmit[2] = transmit[0] ^ transmit[1] ^ 0xFF;
 
-        if (uartWrite(txBuffer, 3) == TX_OK) {
+        if (uartWrite(transmit, 3) == TX_OK) {
           firstSend = false;
         }
       }
@@ -499,11 +499,11 @@ void stateMachine() {
       if (newReflect != lastReflect || firstSend) {
 
         lastReflect = newReflect;
-        txBuffer[0] = 0xC0;
-        txBuffer[1] = newReflect;
-        txBuffer[2] = txBuffer[0] ^ txBuffer[1] ^ 0xFF;
+        transmit[0] = 0xC0;
+        transmit[1] = newReflect;
+        transmit[2] = transmit[0] ^ transmit[1] ^ 0xFF;
 
-        if (uartWrite(txBuffer, 3) == TX_OK) {
+        if (uartWrite(transmit, 3) == TX_OK) {
           firstSend = false;
         }
       }
@@ -524,11 +524,11 @@ void stateMachine() {
       if (newAmbient != lastAmbient || firstSend) {
 
         lastAmbient = newAmbient;
-        txBuffer[0] = 0xC1;
-        txBuffer[1] = newAmbient;
-        txBuffer[2] = txBuffer[0] ^ txBuffer[1] ^ 0xFF;
+        transmit[0] = 0xC1;
+        transmit[1] = newAmbient;
+        transmit[2] = transmit[0] ^ transmit[1] ^ 0xFF;
 
-        if (uartWrite(txBuffer, 3) == TX_OK) {
+        if (uartWrite(transmit, 3) == TX_OK) {
           firstSend = false;
         }
       }
@@ -552,14 +552,14 @@ void stateMachine() {
         lastRefRawFg = reflect;
         lastRefRawBg = background;
 
-        txBuffer[0] = 0xD3;
-        txBuffer[1] = reflect     & 0xFF;
-        txBuffer[2] = reflect    >> 8;
-        txBuffer[3] = background  & 0xFF;
-        txBuffer[4] = background >> 8;
-        txBuffer[5] = txBuffer[0] ^ txBuffer[1] ^ txBuffer[2] ^ txBuffer[3] ^ txBuffer[4] ^ 0xFF;
+        transmit[0] = 0xD3;
+        transmit[1] = reflect     & 0xFF;
+        transmit[2] = reflect    >> 8;
+        transmit[3] = background  & 0xFF;
+        transmit[4] = background >> 8;
+        transmit[5] = transmit[0] ^ transmit[1] ^ transmit[2] ^ transmit[3] ^ transmit[4] ^ 0xFF;
 
-        if (uartWrite(txBuffer, 6) == TX_OK) {
+        if (uartWrite(transmit, 6) == TX_OK) {
           firstSend = false;
         }
       }
@@ -584,23 +584,23 @@ void stateMachine() {
         lastRefRgbG = green;
         lastRefRgbB = blue;
 
-        txBuffer[0] = 0xDC;
-        txBuffer[1] = red    & 0xFF;
-        txBuffer[2] = red   >> 8;
-        txBuffer[3] = green  & 0xFF;
-        txBuffer[4] = green >> 8;
-        txBuffer[5] = blue   & 0xFF;
-        txBuffer[6] = blue  >> 8;
-        txBuffer[7] = black  & 0xFF;
-        txBuffer[8] = black >> 8;
-        txBuffer[9] = txBuffer[0] ^ txBuffer[1] ^
-                      txBuffer[2] ^ txBuffer[3] ^
-                      txBuffer[4] ^ txBuffer[5] ^
-                      txBuffer[6] ^ txBuffer[7] ^ // this is the checksum bug:
-                      txBuffer[8] ^ txBuffer[9] ^ // txBuffer[9] is not initialized to zero
+        transmit[0] = 0xDC;
+        transmit[1] = red    & 0xFF;
+        transmit[2] = red   >> 8;
+        transmit[3] = green  & 0xFF;
+        transmit[4] = green >> 8;
+        transmit[5] = blue   & 0xFF;
+        transmit[6] = blue  >> 8;
+        transmit[7] = black  & 0xFF;
+        transmit[8] = black >> 8;
+        transmit[9] = transmit[0] ^ transmit[1] ^
+                      transmit[2] ^ transmit[3] ^
+                      transmit[4] ^ transmit[5] ^
+                      transmit[6] ^ transmit[7] ^ // this is the checksum bug:
+                      transmit[8] ^ transmit[9] ^ // transmit[9] is not initialized to zero
                       0xFF;                       // instead it contains the old check byte
 
-        if (uartWrite(txBuffer, 10) == TX_OK) {
+        if (uartWrite(transmit, 10) == TX_OK) {
           firstSend = false;
         }
       }
@@ -611,18 +611,18 @@ void stateMachine() {
     case STATE_CALIBRATE_SETUP: {
       color_setup();
 
-      txBuffer[0] = 0xDD;
-      txBuffer[1] = 0x00;
-      txBuffer[2] = 0x00;
-      txBuffer[3] = 0x00;
-      txBuffer[4] = 0x00;
-      txBuffer[5] = 0x00;
-      txBuffer[6] = 0x00;
-      txBuffer[7] = 0x00;
-      txBuffer[8] = 0x00;
-      txBuffer[9] = txBuffer[0] ^ 0xFF;
+      transmit[0] = 0xDD;
+      transmit[1] = 0x00;
+      transmit[2] = 0x00;
+      transmit[3] = 0x00;
+      transmit[4] = 0x00;
+      transmit[5] = 0x00;
+      transmit[6] = 0x00;
+      transmit[7] = 0x00;
+      transmit[8] = 0x00;
+      transmit[9] = transmit[0] ^ 0xFF;
 
-      if (uartWrite(txBuffer, 10) == TX_OK) {
+      if (uartWrite(transmit, 10) == TX_OK) {
         mainState = STATE_CALIBRATE_RUNNING;
       }
       break;
@@ -644,21 +644,21 @@ void stateMachine() {
       if (!ok)
         break;
 
-      txBuffer[0] = 0xDD;
-      txBuffer[1] = (params[0]     ) & 0xFF;
-      txBuffer[2] = (params[0] >> 8) & 0xFF;
-      txBuffer[3] = (params[1]     ) & 0xFF;
-      txBuffer[4] = (params[1] >> 8) & 0xFF;
-      txBuffer[5] = (params[2]     ) & 0xFF;
-      txBuffer[6] = (params[2] >> 8) & 0xFF;
-      txBuffer[7] = 0x00;
-      txBuffer[8] = 0x00;
-      txBuffer[9] = txBuffer[0] ^ txBuffer[1] ^
-                    txBuffer[2] ^ txBuffer[3] ^
-                    txBuffer[4] ^ txBuffer[5] ^
-                    txBuffer[6] ^ 0xFF; // zero bytes are not XORed
+      transmit[0] = 0xDD;
+      transmit[1] = (params[0]     ) & 0xFF;
+      transmit[2] = (params[0] >> 8) & 0xFF;
+      transmit[3] = (params[1]     ) & 0xFF;
+      transmit[4] = (params[1] >> 8) & 0xFF;
+      transmit[5] = (params[2]     ) & 0xFF;
+      transmit[6] = (params[2] >> 8) & 0xFF;
+      transmit[7] = 0x00;
+      transmit[8] = 0x00;
+      transmit[9] = transmit[0] ^ transmit[1] ^
+                    transmit[2] ^ transmit[3] ^
+                    transmit[4] ^ transmit[5] ^
+                    transmit[6] ^ 0xFF; // zero bytes are not XORed
 
-      if (uartWrite(txBuffer, 10) == TX_OK) {
+      if (uartWrite(transmit, 10) == TX_OK) {
         calAuthOk = false;
         mainState = STATE_CALIBRATE_DONE;
       }
