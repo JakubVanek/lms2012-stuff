@@ -67,6 +67,7 @@ code
 #define true  1
 #define false 0
 
+typedef uint8_t  bool;
 typedef uint8_t  u8;
 typedef uint16_t u16;
 typedef uint16_t u32;
@@ -110,12 +111,17 @@ typedef enum {
   TX_OK   = true,
 } tx_status_t;
 
+#define MSG_SYNC   0x00
+#define MSG_NACK   0x02
+#define MSG_ACK    0x04
+#define MSG_SELECT 0x43
+#define MASK_WRITE 0x44
 
 #define AUTOID_DELAY 500 // ms
 
 void stateMachine() {
   u16 currentMs = msCounter;
-  u8 receive[?];
+  u8 received[?];
   u8 transmit[?];
 
   if (currentMs == lastMsTick)
@@ -665,72 +671,53 @@ void stateMachine() {
     }
   }
 
-
-; process received bytes
 switchEnd:
-  Y = SP+0x30
-  uart_rx_process(pOut=SP+0x3F, out A)
-  compare(A, 0)
-  if (A == 0) goto exit
 
-  A = u8(SP+0x3F)
-  if (A == 0x02) { ; SYNC byte
-    wdg_refresh()
-    firstSend = 1
-    goto exit
+  bool hasNewData = uart_rx_process(received);
+  if (!hasNewData)
+    return;
+
+  if (received[0] == MSG_NACK) {
+    wdg_refresh();
+    firstSend = true;
+    return;
   }
 
-  A = mainState
-  if (A ==  3) goto sw2case1 ; handshake
-  if (A ==  5) goto sw2case2 ; COL-COLOR
-  if (A ==  7) goto sw2case2 ; COL-REFLECT
-  if (A ==  9) goto sw2case2 ; COL-AMBIENT
-  if (A == 11) goto sw2case2 ; REF-RAW
-  if (A == 13) goto sw2case2 ; RGB-RAW
-  if (A == 15) goto sw2case2 ; COL-CAL
-  goto exit
+  switch ((main_state_t) mainState) {
+    case STATE_UART_HANDSHAKE: {
+      if (initState == 1 && received[0] == MSG_SYNC) {
+        initState = 2
+      }
+      if (initState == 39 && received[0] == MSG_ACK) {
+        initState = 40
+      }
+      break;
+    }
 
-sw2case1:
-  if (initState == 0x01) {
-    if (u8(SP+0x3F) == 0x00) ; SYNC
-      initState = 2
-    goto exit
+    case STATE_COLORID_RUNNING:
+    case STATE_REFLECT_RUNNING:
+    case STATE_AMBIENT_RUNNING:
+    case STATE_REFRAW_RUNNING:
+    case STATE_RGBRAW_RUNNING:
+    case STATE_CALIBRATE_RUNNING: {
+      if (received[0] == MSG_SELECT) {
+        if (received[1] == 0) mainState = STATE_REFLECT_SETUP;
+        if (received[1] == 1) mainState = STATE_AMBIENT_SETUP;
+        if (received[1] == 2) mainState = STATE_COLORID_SETUP;
+        if (received[1] == 3) mainState = STATE_REFRAW_SETUP;
+        if (received[1] == 4) mainState = STATE_RGBRAW_SETUP;
+        if (received[1] == 5) mainState = STATE_CALIBRATE_SETUP;
+
+      } else if ((received[0] & MASK_WRITE) == MASK_WRITE) {
+
+        if (mainState == STATE_CALIBRATE_RUNNING &&
+              memcmp(&received[1], "LEGO-FAC-CAL-1", 14) == 0) {
+          calAuthOk = 1;
+        }
+      }
+      break;
+    }
   }
-  if (initState == 0x27) {
-    if (u8(SP+0x3F) == 0x04) ; ACK
-      initState = 0x28
-  }
-  goto exit
-
-sw2case2:
-  if (u8(SP+0x3f) != 0x43) goto notSelect
-  if (u8(SP+0x40) == 0   ) mainState =  6
-  if (u8(SP+0x40) == 1   ) mainState =  8
-  if (u8(SP+0x40) == 2   ) mainState =  4
-  if (u8(SP+0x40) == 3   ) mainState = 10
-  if (u8(SP+0x40) == 4   ) mainState = 12
-  if (u8(SP+0x40) == 5   ) mainState = 14
-  goto exit
-
-notSelect:
-  if (!(u8(SP+0x3f) & 0x44)) goto exit
-  if (mainState     != 15)     goto exit
-  if (u8(SP+0x40) != 'L')    goto exit
-  if (u8(SP+0x41) != 'E')    goto exit
-  if (u8(SP+0x42) != 'G')    goto exit
-  if (u8(SP+0x43) != 'O')    goto exit
-  if (u8(SP+0x44) != '-')    goto exit
-  if (u8(SP+0x45) != 'F')    goto exit
-  if (u8(SP+0x46) != 'A')    goto exit
-  if (u8(SP+0x47) != 'C')    goto exit
-  if (u8(SP+0x48) != '-')    goto exit
-  if (u8(SP+0x49) != 'C')    goto exit
-  if (u8(SP+0x4a) != 'A')    goto exit
-  if (u8(SP+0x4b) != 'L')    goto exit
-  if (u8(SP+0x4c) != '-')    goto exit
-  if (u8(SP+0x4d) != '1')    goto exit
-  calAuthOk = 1
-exit:
   return
 }
 
