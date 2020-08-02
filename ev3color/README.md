@@ -100,26 +100,26 @@ buffer overflows.
 
 ## Tools used
 
- - HW: [LEGO #45506][https://www.lego.com/cs-cz/product/ev3-color-sensor-45506]
+ - HW: [LEGO #45506](https://www.lego.com/cs-cz/product/ev3-color-sensor-45506)
        with revision code 20N7.
- - HW: [ST-Link/V2][https://www.st.com/en/development-tools/st-link-v2.html]
+ - HW: [ST-Link/V2](https://www.st.com/en/development-tools/st-link-v2.html)
        as an ISP programmer.
- - SW: [stm8flash][https://github.com/vdudouyt/stm8flash]
+ - SW: [stm8flash](https://github.com/vdudouyt/stm8flash)
        for downloading the flash under Linux.
- - SW: [naken_asm][https://github.com/mikeakohn/naken_asm]
+ - SW: [naken_asm](https://github.com/mikeakohn/naken_asm)
        as a disassembler.
- - SW: [Geany][https://www.geany.org/]
+ - SW: [Geany](https://www.geany.org/)
        as a text editor.
- - SW: [Okteta][https://kde.org/applications/en/utilities/org.kde.okteta]
+ - SW: [Okteta](https://kde.org/applications/en/utilities/org.kde.okteta)
        as a hex editor.
 
 ## Documents used
 
- - [STM8S103F3 datasheet][https://www.st.com/resource/en/datasheet/stm8s103f2.pdf]
+ - [STM8S103F3 datasheet](https://www.st.com/resource/en/datasheet/stm8s103f2.pdf)
    for general information about the MCU and its memory map.
- - [STM8S reference datasheet][https://www.st.com/resource/en/reference_manual/cd00190271-stm8s-series-and-stm8af-series-8bit-microcontrollers-stmicroelectronics.pdf]
+ - [STM8S reference datasheet](https://www.st.com/resource/en/reference_manual/cd00190271-stm8s-series-and-stm8af-series-8bit-microcontrollers-stmicroelectronics.pdf)
    for information about the MCU subsystems (e.g. ADC, UART, GPIO).
- - [STM8 CPU programming manual][https://www.st.com/resource/en/programming_manual/cd00161709-stm8-cpu-programming-manual-stmicroelectronics.pdf]
+ - [STM8 CPU programming manual](https://www.st.com/resource/en/programming_manual/cd00161709-stm8-cpu-programming-manual-stmicroelectronics.pdf)
    for information about the instruction set.
- - [EV3 Hardware Developer Kit][https://education.lego.com/en-us/support/mindstorms-ev3/developer-kits]
+ - [EV3 Hardware Developer Kit](https://education.lego.com/en-us/support/mindstorms-ev3/developer-kits)
    for the sensor schematics and the MCU model.
