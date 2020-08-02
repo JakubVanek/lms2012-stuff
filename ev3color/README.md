@@ -3,6 +3,10 @@
 This folder contains findings from firmware reverse engineering of the EV3 color sensor.
 C pseudocode of the firmware can be found in [`program.c`](program.c) and [`program.h`](program.h).
 
+Please note that there may be accidental errors in the code that are
+not present in the original firmware. For verification, please check
+against disassembly of the original [flash image](binaries/flash.bin).
+
 ## Why?
 
 Mostly for the challenge, but there was also another reason.
