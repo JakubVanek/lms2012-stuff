@@ -2,7 +2,7 @@
 
 ## Reverse engineering the EV3 Color sensor
 
-This contains reverse-engineered EV3 color sensor firmware source code. See `/ev3color` for details.
+This contains reverse-engineered EV3 color sensor firmware source code. See [`ev3color`](ev3color) for details.
 
 ## LMS2012 formats
 
