@@ -139,11 +139,6 @@ typedef enum {
 #define RGB_RAW     4
 #define COL_CAL     5
 
-#define INFO_MODE(N) ((N) & 0x07)
-#define DATA_MODE(N) ((N) & 0x07)
-
-#define DATA_MSG(mode) (MSG_DATA | DATA_MODE(mode))
-
 #define MSGLEN_1  0x00
 #define MSGLEN_2  0x08
 #define MSGLEN_4  0x10

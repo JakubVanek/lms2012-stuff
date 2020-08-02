@@ -363,7 +363,7 @@ void stateMachine() {
       if (newColor != lastColor || forceSend) {
 
         lastColor = newColor;
-        transmit[0] = DATA_MSG(COL_CAL) | MSGLEN_1;
+        transmit[0] = MSG_DATA | COL_COLOR | MSGLEN_1;
         transmit[1] = newColor;
         transmit[2] = transmit[0] ^ transmit[1] ^ 0xFF;
 
@@ -388,7 +388,7 @@ void stateMachine() {
       if (newReflect != lastReflect || forceSend) {
 
         lastReflect = newReflect;
-        transmit[0] = DATA_MSG(COL_REFLECT) | MSGLEN_1;
+        transmit[0] = MSG_DATA | COL_REFLECT | MSGLEN_1;
         transmit[1] = newReflect;
         transmit[2] = transmit[0] ^ transmit[1] ^ 0xFF;
 
@@ -413,7 +413,7 @@ void stateMachine() {
       if (newAmbient != lastAmbient || forceSend) {
 
         lastAmbient = newAmbient;
-        transmit[0] = DATA_MSG(COL_AMBIENT) | MSGLEN_1;
+        transmit[0] = MSG_DATA | COL_AMBIENT | MSGLEN_1;
         transmit[1] = newAmbient;
         transmit[2] = transmit[0] ^ transmit[1] ^ 0xFF;
 
@@ -441,7 +441,7 @@ void stateMachine() {
         lastRefRawFg = reflect;
         lastRefRawBg = background;
 
-        transmit[0] = DATA_MSG(REF_RAW) | MSGLEN_4;
+        transmit[0] = MSG_DATA | REF_RAW | MSGLEN_4;
         transmit[1] = reflect     & 0xFF;
         transmit[2] = reflect    >> 8;
         transmit[3] = background  & 0xFF;
@@ -473,7 +473,7 @@ void stateMachine() {
         lastRefRgbG = green;
         lastRefRgbB = blue;
 
-        transmit[0] = DATA_MSG(RGB_RAW) | MSGLEN_8;
+        transmit[0] = MSG_DATA | RGB_RAW | MSGLEN_8;
         transmit[1] = red    & 0xFF;
         transmit[2] = red   >> 8;
         transmit[3] = green  & 0xFF;
@@ -500,7 +500,7 @@ void stateMachine() {
     case STATE_CALIBRATE_SETUP: {
       color_setup();
 
-      transmit[0] = DATA_MSG(COL_CAL) | MSGLEN_8;
+      transmit[0] = MSG_DATA | COL_CAL | MSGLEN_8;
       transmit[1] = 0x00;
       transmit[2] = 0x00;
       transmit[3] = 0x00;
@@ -533,7 +533,7 @@ void stateMachine() {
       if (!ok)
         break;
 
-      transmit[0] = DATA_MSG(COL_CAL) | MSGLEN_8;
+      transmit[0] = MSG_DATA | COL_CAL | MSGLEN_8;
       transmit[1] = (params[0]     ) & 0xFF;
       transmit[2] = (params[0] >> 8) & 0xFF;
       transmit[3] = (params[1]     ) & 0xFF;
