@@ -636,12 +636,11 @@ void stateMachine() {
       u32 params[3];
 
       // calibrate
-      eeprom_export(params);
+      doCalibration(params);
       // store
-      eeprom_store(params);
+      saveEeprom(params);
       // reload
-      u8 ok = eeprom_import(params);
-
+      u8 ok = importCalibration(params);
       if (!ok)
         break;
 
@@ -1078,15 +1077,17 @@ exit:
   }
   return
 
-0x9493 eeprom_export(u32 *params):
-  u16 red, green, blue, black
+// at address 0x9493
+void doCalibration(u32 *params) {
+  u16 red, green, blue, black;
 
-  measureAllColors(&red, &green, &blue, &black)
+  measureAllColors(&red, &green, &blue, &black);
 
-  params[0] = (u32)((409.0f / (float) red  ) * 1000.0f)
-  params[1] = (u32)((409.0f / (float) green) * 1000.0f)
-  params[2] = (u32)((409.0f / (float) blue ) * 1000.0f)
-  return
+  params[0] = (u32)((409.0f / (float) red  ) * 1000.0f);
+  params[1] = (u32)((409.0f / (float) green) * 1000.0f);
+  params[2] = (u32)((409.0f / (float) blue ) * 1000.0f);
+  return;
+}
 
 0x9518 LUT1:
  - [ 0]: 0001
@@ -1202,11 +1203,13 @@ exit:
  - [48]: 03BB
  - [49]: 0400
 
-0x95f4 eeprom_import(u32 *src):
-  redFactor   = (float) src[0] / 1000.0f
-  greenFactor = (float) src[1] / 1000.0f
-  blueFactor  = (float) src[2] / 1000.0f
+// at address 0x95f4
+u8 importCalibration(u32 *params) {
+  redFactor   = (float) params[0] / 1000.0f;
+  greenFactor = (float) params[1] / 1000.0f;
+  blueFactor  = (float) params[2] / 1000.0f;
   return true;
+}
 
 0x9657 measureADC(channel in A, dst in X):
   ADC_CSR &= 0xF0
@@ -1272,15 +1275,18 @@ fail:
   ambientMode = 1
   return
 
-0x97e9 eeprom_store(buf):
-  FLASH_DUKR = 0xAE
-  FLASH_DUKR = 0x56
-  u32[$4000] = u32(buf+0)
-  u32[$4004] = u32(buf+4)
-  u32[$4008] = u32(buf+8)
-  u16[$9a] = 0x4008
-  FLASH_IAPSR &= ~(1 << EOP)
-  return
+// at address 0x97e9
+void saveEeprom(u32 *params) {
+  FLASH_DUKR = 0xAE;
+  FLASH_DUKR = 0x56;
+
+  *((u32*) 0x4000) = params[0];
+  *((u32*) 0x4004) = params[1];
+  *((u32*) 0x4008) = params[2];
+
+  FLASH_IAPSR &= ~(1 << EOP);
+  return;
+}
 
 0x9869 uart_start:
   UART1_DIV  = 0x1a0a ; 2400 baud
@@ -1314,12 +1320,14 @@ fail:
     call reset_rxbuf
   ireturn
 
-0x98fd eeprom_load(buf):
-  u32(buf+0) = u32[$4000]
-  u32(buf+4) = u32[$4004]
-  u32(buf+8) = u32[$4008]
-  u16[$9a] = 0x4008
-  return
+// at address 0x98fd
+void loadEeprom(u32 *params) {
+  params[0] = *((u32*) 0x4000);
+  params[1] = *((u32*) 0x4004);
+  params[2] = *((u32*) 0x4008);
+  eepromPtr = (u32*) 0x4008; // unused
+  return;
+}
 
 setup_tick():
   CLK_CKDIVR = 0 ; HSI clock = CPU clock = master clock = 16 MHz
@@ -1352,12 +1360,12 @@ void init_memory():
 
 
 0x9964 analog_setup():
-  u32 buffer[3]
+  u32 params[3];
 
   call wdg_setup()
   call adc_setup()
-  call eeprom_load(buffer)
-  call eeprom_import(buffer)
+  loadEeprom(params);
+  importCalibration(params);
   return
 
 0x9979 adc_setup():
