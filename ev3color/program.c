@@ -96,6 +96,58 @@ typedef enum {
 } main_state_t;
 
 typedef enum {
+  INIT_WAIT_FOR_SYNC  =  1,
+
+  INIT_SENSOR_ID =  2,
+  INIT_MODES     =  3,
+  INIT_SPEED     =  4,
+
+  INIT_COL_CAL_NAME   =  5,
+  INIT_COL_CAL_RAW    =  6,
+  INIT_COL_CAL_SI     =  7,
+  INIT_COL_CAL_FORMAT =  8,
+  INIT_COL_CAL_PAUSE  =  9,
+
+  INIT_RGB_RAW_NAME   = 10,
+  INIT_RGB_RAW_RAW    = 11,
+  INIT_RGB_RAW_SI     = 12,
+  INIT_RGB_RAW_FORMAT = 13,
+  INIT_RGB_RAW_PAUSE  = 14,
+
+  INIT_REF_RAW_NAME   = 15,
+  INIT_REF_RAW_RAW    = 16,
+  INIT_REF_RAW_SI     = 17,
+  INIT_REF_RAW_FORMAT = 18,
+  INIT_REF_RAW_PAUSE  = 19,
+
+  INIT_COL_COLOR_NAME   = 20,
+  INIT_COL_COLOR_RAW    = 21,
+  INIT_COL_COLOR_SI     = 22,
+  INIT_COL_COLOR_SYMBOL = 23,
+  INIT_COL_COLOR_FORMAT = 24,
+  INIT_COL_COLOR_PAUSE  = 25,
+
+  INIT_COL_AMBIENT_NAME   = 26,
+  INIT_COL_AMBIENT_RAW    = 27,
+  INIT_COL_AMBIENT_SI     = 28,
+  INIT_COL_AMBIENT_SYMBOL = 29,
+  INIT_COL_AMBIENT_FORMAT = 30,
+  INIT_COL_AMBIENT_PAUSE  = 31,
+
+  INIT_COL_REFLECT_NAME   = 32,
+  INIT_COL_REFLECT_RAW    = 33,
+  INIT_COL_REFLECT_SI     = 34,
+  INIT_COL_REFLECT_SYMBOL = 35,
+  INIT_COL_REFLECT_FORMAT = 36,
+  INIT_COL_REFLECT_PAUSE  = 37,
+
+  INIT_SEND_ACK     = 38,
+  INIT_WAIT_FOR_ACK = 39,
+  INIT_START_DATA   = 40,
+
+} init_state_t;
+
+typedef enum {
   LED_RED   = 0,
   LED_GREEN = 1,
   LED_BLUE  = 2,
@@ -117,7 +169,11 @@ typedef enum {
 #define MSG_SELECT 0x43
 #define MASK_WRITE 0x44
 
-#define AUTOID_DELAY 500 // ms
+#define AUTOID_DELAY        500 // ms
+#define DELAY_BETWEEN_SYNCS   6 // ms
+#define MAX_SYNC_ATTEMPTS    10
+#define INTERMODE_PAUSE      30 // ms
+#define ACK_TIMEOUT          80 // ms
 
 void stateMachine() {
   u16 currentMs = msCounter;
@@ -152,318 +208,256 @@ void stateMachine() {
 
     // send sensor information to the brick
     case STATE_UART_HANDSHAKE:
+      switch ((init_state_t) initState) {
 
-; CASE A=3: uart handshake
-0x8131:
-  A = initState
-  if (A ==  1) goto $8227
-  if (A ==  2) goto $8252
-  if (A ==  3) goto $826e
-  if (A ==  4) goto $828a
-  if (A ==  5) goto $82a6
-  if (A ==  6) goto $82c3
-  if (A ==  7) goto $82dd
-  if (A ==  8) goto $82f7
-  if (A ==  9) goto $8313
-  if (A == 10) goto $8322
-  if (A == 11) goto $833f
-  if (A == 12) goto $8359
-  if (A == 13) goto $8373
-  if (A == 14) goto $838f
-  if (A == 15) goto $839e
-  if (A == 16) goto $83bb
-  if (A == 17) goto $83d5
-  if (A == 18) goto $83f4
-  if (A == 19) goto $8413
-  if (A == 20) goto $8422
-  if (A == 21) goto $8444
-  if (A == 22) goto $8463
-  if (A == 23) goto $8482
-  if (A == 24) goto $84a1
-  if (A == 25) goto $84c0
-  if (A == 26) goto $84cf
-  if (A == 27) goto $84f1
-  if (A == 28) goto $8510
-  if (A == 29) goto $852f
-  if (A == 30) goto $854e
-  if (A == 31) goto $856d
-  if (A == 32) goto $857c
-  if (A == 33) goto $859e
-  if (A == 34) goto $85bd
-  if (A == 35) goto $85dc
-  if (A == 36) goto $85fb
-  if (A == 37) goto $861e
-  if (A == 38) goto $862d
-  if (A == 39) goto $864a
-  if (A == 40) goto $8659
-  goto switchEnd
+        // wait for sync from brick
+        // this state is exited through from the command processing code below the main switch
+        case INIT_WAIT_FOR_SYNC:
+          if (eventTimer > DELAY_BETWEEN_SYNCS) {
+            transmit[0] = MSG_SYNC;
+            if (uartWrite(transmit, 1) == TX_OK) {
+              eventTimer = 0;
+              syncAttempts++;
+            }
+            if (syncAttempts > MAX_SYNC_ATTEMPTS) {
+              mainState = STATE_RESTART;
+            }
+          }
+          break;
+
+        // send global sensor information
+        case INIT_SENSOR_ID:
+          memcpy(transmit, 0x9bb7, 3);
+          if (uartWrite(transmit, 3) == TX_OK) initState = INIT_MODES;
+          break;
+
+        case INIT_MODES:
+          memcpy(transmit, 0x9bb3, 4);
+          if (uartWrite(transmit, 4) == TX_OK) initState = INIT_SPEED;
+          break;
+
+        case INIT_SPEED:
+          memcpy(transmit, 0x9b98, 6);
+          if (uartWrite(transmit, 6) == TX_OK) initState = INIT_COL_CAL_NAME;
+          break;
 
 
-0x8227: ; sstate 1, receiver will transition this to 2
-  if (eventTimer >= 7) {
-    u8(SP+1) = 0x00 ; SYNC byte
-    if (uartWrite(src=SP+1, len=1)) {
-      eventTimer = 0
-      syncAttempts++
-    }
-    if (syncAttempts >= 11) {
-      mainState = 1
-    }
-  }
-  goto switchEnd
+        // send COL-CAL info
+        case INIT_COL_CAL_NAME:
+          wdg_refresh();
+          memcpy(transmit, 0x9b05, 11);
+          if (uartWrite(transmit, 11) == TX_OK) initState = INIT_COL_CAL_RAW;
+          break;
 
-0x8252: ; sstate 2
-  memcpy(SP+1, 0x9bb7, 3)
-  if (uartWrite(src=SP+1, len=3))
-    initState = 3
-  goto switchEnd
+        case INIT_COL_CAL_RAW:
+          memcpy(transmit, 0x9b10, 11);
+          if (uartWrite(transmit, 11) == TX_OK) initState = INIT_COL_CAL_SI;
+          break;
 
-0x826e: ; sstate 3
-  memcpy(SP+1, 0x9bb3, 4)
-  if (uartWrite(src=SP+1, len=4))
-    initState = 4
-  goto switchEnd
+        case INIT_COL_CAL_SI:
+          memcpy(transmit, 0x9b1b, 11);
+          if (uartWrite(transmit, 11) == TX_OK) initState = INIT_COL_CAL_FORMAT;
+          break;
 
-0x828a: ; sstate 4
-  memcpy(SP+1, 0x9b98, 6)
-  if (uartWrite(src=SP+1, len=6))
-    initState = 5
-  goto switchEnd
+        case INIT_COL_CAL_FORMAT:
+          memcpy(transmit, 0x9b83, 7);
+          if (uartWrite(transmit, 7) == TX_OK) {
+            initState    = INIT_COL_CAL_PAUSE;
+            pauseCounter = 0;
+          } break;
 
-0x82a6: ; sstate 5
-  wdg_refresh()
-  memcpy(SP+1, 0x9b05, 11)
-  if (uartWrite(src=SP+1, len=11))
-    initState = 6
-  goto switchEnd
+        case INIT_COL_CAL_PAUSE:
+          if (++pauseCounter > INTERMODE_PAUSE) initState = INIT_RGB_RAW_NAME;
+          break;
 
-0x82c3: ; sstate 6
-  memcpy(SP+1, 0x9b10, 11)
-  if (uartWrite(src=SP+1, len=11))
-    initState = 7
-  goto switchEnd
 
-0x82dd: ; sstate 7
-  memcpy(SP+1, 0x9b1b, 11)
-  if (uartWrite(src=SP+1, len=11))
-    initState = 8
-  goto switchEnd
+        // send RGB-RAW info
+        case INIT_RGB_RAW_NAME:
+          wdg_refresh();
+          memcpy(transmit, 0x9ae4, 11);
+          if (uartWrite(transmit, 11) == TX_OK) initState = INIT_RGB_RAW_RAW;
+          break;
 
-0x82f7: ; sstate 8
-  memcpy(SP+1, 0x9b83, 7)
-  if (uartWrite(src=SP+1, len=7)) {
-    initState = 9
-    pauseCounter = 0
-  }
-  goto switchEnd
+        case INIT_RGB_RAW_RAW:
+          memcpy(transmit, 0x9aef, 11);
+          if (uartWrite(transmit, 11) == TX_OK) initState = INIT_RGB_RAW_SI;
+          break;
 
-0x8313: ; sstate 9
-  if (++pauseCounter >= 31)
-    initState = 10
-  goto switchEnd
+        case INIT_RGB_RAW_SI:
+          memcpy(transmit, 0x9afa, 11);
+          if (uartWrite(transmit, 11) == TX_OK) initState = INIT_RGB_RAW_FORMAT;
+          break;
 
-0x8322: ; sstate 10
-  wdg_refresh()
-  memcpy(SP+1, 0x9ae4, 11)
-  if (uartWrite(src=SP+1, len=11))
-    initState = 11
-  goto switchEnd
+        case INIT_RGB_RAW_FORMAT:
+          memcpy(transmit, 0x9b7c, 7);
+          if (uartWrite(transmit, 7) == TX_OK) {
+            initState    = INIT_RGB_RAW_PAUSE;
+            pauseCounter = 0;
+          } break;
 
-0x833f: ; sstate 11
-  memcpy(SP+1, 0x9aef, 11)
-  if (uartWrite(src=SP+1, len=11))
-    initState = 12
-  goto switchEnd
+        case INIT_RGB_RAW_PAUSE:
+          if (++pauseCounter > INTERMODE_PAUSE) initState = INIT_REF_RAW_NAME;
+          break;
 
-0x8359: ; sstate 12
-  memcpy(SP+1, 0x9afa, 11)
-  if (uartWrite(src=SP+1, len=11))
-    initState = 13
-  goto switchEnd
 
-0x8373: ; sstate 13
-  memcpy(SP+1, 0x9b7c, 7)
-  if (uartWrite(src=SP+1, len=7)) {
-    initState = 14
-    pauseCounter = 0
-  }
-  goto switchEnd
+        // send REF-RAW info
+        case INIT_REF_RAW_NAME:
+          wdg_refresh();
+          memcpy(transmit, 0x9ac3, 11);
+          if (uartWrite(transmit, 11) == TX_OK) initState = INIT_REF_RAW_RAW;
+          break;
 
-0x838f: ; sstate 14
-  if (++pauseCounter >= 31)
-    initState = 15
-  goto switchEnd
+        case INIT_REF_RAW_RAW:
+          memcpy(transmit, 0x9ace, 11);
+          if (uartWrite(transmit, 11) == TX_OK) initState = INIT_REF_RAW_SI;
+          break;
 
-0x839e: ; sstate 15
-  wdg_refresh()
-  memcpy(SP+1, 0x9ac3, 11)
-  if (uartWrite(src=SP+1, len=11))
-    initState = 16
-  goto switchEnd
+        case INIT_REF_RAW_SI:
+          memcpy(transmit, 0x9ad9, 11);
+          if (uartWrite(transmit, 11) == TX_OK) initState = INIT_REF_RAW_FORMAT;
+          break;
 
-0x83bb: ; sstate 16
-  memcpy(SP+1, 0x9ace, 11)
-  if (uartWrite(src=SP+1, len=11))
-    initState = 17
-  goto switchEnd
+        case INIT_REF_RAW_FORMAT:
+          memcpy(transmit, 0x9b75, 7);
+          if (uartWrite(transmit, 7) == TX_OK) {
+            initState    = INIT_REF_RAW_PAUSE;
+            pauseCounter = 0;
+          } break;
 
-0x83d5: ; sstate 17
-  memcpy(SP+1, 0x9ad9, 11)
-  if (uartWrite(src=SP+1, len=11))
-    initState = 18
-  goto switchEnd
+        case INIT_REF_RAW_PAUSE:
+          if (++pauseCounter > INTERMODE_PAUSE) initState = INIT_COL_COLOR_NAME;
+          break;
 
-0x83f4: ; sstate 18
-  memcpy(SP+1, 0x9b75, 7)
-  if (uartWrite(src=SP+1, len=7)) {
-    initState = 19
-    pauseCounter = 0
-  }
-  goto switchEnd
 
-0x8413: ; sstate 19
-  if (++pauseCounter >= 31)
-    initState = 20
-  goto switchEnd
+        // send COL-COLOR info
+        case INIT_COL_COLOR_NAME:
+          wdg_refresh();
+          memcpy(transmit, 0x99c9, 19);
+          if (uartWrite(transmit, 19) == TX_OK) initState = INIT_COL_COLOR_RAW;
+          break;
 
-0x8422: ; sstate 20
-  wdg_refresh()
-  memcpy(SP+1, 0x99c9, 19)
-  if (uartWrite(src=SP+1, len=19))
-    initState = 21
-  goto switchEnd
+        case INIT_COL_COLOR_RAW:
+          memcpy(transmit, 0x9aa2, 11);
+          if (uartWrite(transmit, 11) == TX_OK) initState = INIT_COL_COLOR_SI;
+          break;
 
-0x8444: ; sstate 21
-  memcpy(SP+1, 0x9aa2, 11)
-  if (uartWrite(src=SP+1, len=11))
-    initState = 22
-  goto switchEnd
+        case INIT_COL_COLOR_SI:
+          memcpy(transmit, 0x9aad, 11);
+          if (uartWrite(transmit, 11) == TX_OK) initState = INIT_COL_COLOR_SYMBOL;
+          break;
 
-0x8463: ; sstate 22
-  memcpy(SP+1, 0x9aad, 11)
-  if (uartWrite(src=SP+1, len=11))
-    initState = 23
-  goto switchEnd
+        case INIT_COL_COLOR_SYMBOL:
+          memcpy(transmit, 0x9ab8, 11);
+          if (uartWrite(transmit, 11) == TX_OK) initState = INIT_COL_COLOR_FORMAT;
+          break;
 
-0x8482: ; sstate 23
-  memcpy(SP+1, 0x9ab8, 11)
-  if (uartWrite(src=SP+1, len=11))
-    initState = 24
-  goto switchEnd
+        case INIT_COL_COLOR_FORMAT:
+          memcpy(transmit, 0x9b6e, 7);
+          if (uartWrite(transmit, 7) == TX_OK) {
+            initState    = INIT_COL_COLOR_PAUSE;
+            pauseCounter = 0;
+          } break;
 
-0x84a1: ; sstate 24
-  memcpy(SP+1, 0x9b6e, 7)
-  if (uartWrite(src=SP+1, len=7)) {
-    initState = 25
-    pauseCounter = 0
-  }
-  goto switchEnd
+        case INIT_COL_COLOR_PAUSE:
+          if (++pauseCounter > INTERMODE_PAUSE) initState = INIT_COL_AMBIENT_NAME;
+          break;
 
-0x84c0: ; sstate 25
-  if (++pauseCounter >= 31)
-    initState = 26
-  goto switchEnd
 
-0x84cf: ; sstate 26
-  wdg_refresh()
-  memcpy(SP+1, 0x99b6, 19)
-  if (uartWrite(src=SP+1, len=19))
-    initState = 27
-  goto switchEnd
+        // send COL-AMBIENT info
+        case INIT_COL_AMBIENT_NAME:
+          wdg_refresh();
+          memcpy(transmit, 0x99b6, 19);
+          if (uartWrite(transmit, 19) == TX_OK) initState = INIT_COL_AMBIENT_RAW;
+          break;
 
-0x84f1: ; sstate 27
-  memcpy(SP+1, 0x9a81, 11)
-  if (uartWrite(src=SP+1, len=11))
-    initState = 28
-  goto switchEnd
+        case INIT_COL_AMBIENT_RAW:
+          memcpy(transmit, 0x9a81, 11);
+          if (uartWrite(transmit, 11) == TX_OK) initState = INIT_COL_AMBIENT_SI;
+          break;
 
-0x8510: ; sstate 28
-  memcpy(SP+1, 0x9a8c, 11)
-  if (uartWrite(src=SP+1, len=11))
-    initState = 29
-  goto switchEnd
+        case INIT_COL_AMBIENT_SI:
+          memcpy(transmit, 0x9a8c, 11);
+          if (uartWrite(transmit, 11) == TX_OK) initState = INIT_COL_AMBIENT_SYMBOL;
+          break;
 
-0x852f: ; sstate 29
-  memcpy(SP+1, 0x9a97, 11)
-  if (uartWrite(src=SP+1, len=11))
-    initState = 30
-  goto switchEnd
+        case INIT_COL_AMBIENT_SYMBOL:
+          memcpy(transmit, 0x9a97, 11);
+          if (uartWrite(transmit, 11) == TX_OK) initState = INIT_COL_AMBIENT_FORMAT;
+          break;
 
-0x854e: ; sstate 30
-  memcpy(SP+1, 0x9b67, 7)
-  if (uartWrite(src=SP+1, len=7)) {
-    initState = 31
-    pausecounter = 0
-  }
-  goto switchEnd
+        case INIT_COL_AMBIENT_FORMAT:
+          memcpy(transmit, 0x9b67, 7);
+          if (uartWrite(transmit, 7) == TX_OK) {
+            initState    = INIT_COL_AMBIENT_PAUSE;
+            pauseCounter = 0;
+          } break;
 
-0x856d: ; sstate 31
-  if (++pauseCounter >= 31)
-    initState = 32
-  goto switchEnd
+        case INIT_COL_AMBIENT_PAUSE:
+          if (++pauseCounter > INTERMODE_PAUSE) initState = INIT_COL_REFLECT_NAME;
+          break;
 
-0x857c: ; sstate 32
-  wdg_refresh()
-  memcpy(SP+1, 0x99a3, 19)
-  if (uartWrite(src=SP+1, len=19))
-    initState = 33
-  goto switchEnd
 
-0x859e: ; sstate 33
-  memcpy(SP+1, 0x9a60, 11)
-  if (uartWrite(src=SP+1, len=11))
-    initState = 34
-  goto switchEnd
+        // send COL-REFLECT info
+        case INIT_COL_REFLECT_NAME:
+          wdg_refresh();
+          memcpy(transmit, 0x99a3, 19);
+          if (uartWrite(transmit, 19) == TX_OK) initState = INIT_COL_REFLECT_RAW;
+          break;
 
-0x85bd: ; sstate 34
-  memcpy(SP+1, 0x9a6b, 11)
-  if (uartWrite(src=SP+1, len=11))
-    initState = 35
-  goto switchEnd
+        case INIT_COL_REFLECT_RAW:
+          memcpy(transmit, 0x9a60, 11);
+          if (uartWrite(transmit, 11) == TX_OK) initState = INIT_COL_REFLECT_SI;
+          break;
 
-0x85dc: ; sstate 35
-  memcpy(SP+1, 0x9a76, 11)
-  if (uartWrite(src=SP+1, len=11))
-    initState = 36
-  goto switchEnd
+        case INIT_COL_REFLECT_SI:
+          memcpy(transmit, 0x9a6b, 11);
+          if (uartWrite(transmit, 11) == TX_OK) initState = INIT_COL_REFLECT_SYMBOL;
+          break;
 
-0x85fb: ; sstate 36
-  memcpy(SP+1, 0x9b60, 7)
-  if (uartWrite(src=SP+1, len=7)) {
-    initState = 37
-    pauseCounter = 0
-  }
-  goto switchEnd
+        case INIT_COL_REFLECT_SYMBOL:
+          memcpy(transmit, 0x9a76, 11);
+          if (uartWrite(transmit, 11) == TX_OK) initState = INIT_COL_REFLECT_FORMAT;
+          break;
 
-0x861e: ; sstate 37
-  if (++pauseCounter >= 31)
-    initState = 38
-  goto switchEnd
+        case INIT_COL_REFLECT_FORMAT:
+          memcpy(transmit, 0x9b60, 7);
+          if (uartWrite(transmit, 7) == TX_OK) {
+            initState    = INIT_COL_REFLECT_PAUSE;
+            pauseCounter = 0;
+          } break;
 
-0x862d: ; sstate 38
-  frameLength = 0
-  u8(SP+1) = 0x04 ; ACK
-  if (uartWrite(src=SP+1, len=1)) {
-    initState = 39
-    eventTimer = 0
-  }
-  goto switchEnd
+        case INIT_COL_REFLECT_PAUSE:
+          if (++pauseCounter > INTERMODE_PAUSE) initState = INIT_SEND_ACK;
+          break;
 
-0x864a: ; sstate 39, receiver will transition this to 40
-  if (eventTimer >= 81) {
-    mainState = 1
-  }
-  goto switchEnd
 
-0x8659: ; sstate 40
-  if (enter_high_baudrate()) {
-    wdg_refresh()
-    initState = 1
-    mainState = 6
-  }
-  goto switchEnd
-; end of setup
+        // finalize handshake - send ACK
+        case INIT_SEND_ACK:
+          frameLength = 0; // initialize incoming frame decoding
 
+          transmit[0] = MSG_ACK;
+          if (uartWrite(transmit, 1) == TX_OK) {
+            initState  = INIT_WAIT_FOR_ACK;
+            eventTimer = 0;
+          }
+          break;
+
+        // wait for ACK reploy
+        // this state is exited through the command processing code below the main switch
+        case INIT_WAIT_FOR_ACK:
+          if (eventTimer > ACK_TIMEOUT) {
+            mainState = STATE_RESTART;
+          }
+          break;
+
+        case INIT_START_DATA:
+          if (enter_high_baudrate() == TX_OK) {
+            wdg_refresh();
+            initState = INIT_WAIT_FOR_SYNC;
+            mainState = STATE_REFLECT_SETUP;
+          }
+          break;
+      }
       break;
 
     // prepare COL-COLOR mode
@@ -677,6 +671,7 @@ switchEnd:
   if (!hasNewData)
     return;
 
+  // NACK => resend data + refresh watchdog
   if (received[0] == MSG_NACK) {
     wdg_refresh();
     forceSend = true;
@@ -684,22 +679,25 @@ switchEnd:
   }
 
   switch ((main_state_t) mainState) {
+    // handle brick messages in handshake
     case STATE_UART_HANDSHAKE: {
-      if (initState == 1 && received[0] == MSG_SYNC) {
-        initState = 2
+      if (initState == INIT_WAIT_FOR_SYNC && received[0] == MSG_SYNC) {
+        initState = INIT_SENSOR_ID;
       }
-      if (initState == 39 && received[0] == MSG_ACK) {
-        initState = 40
+      if (initState == INIT_WAIT_FOR_ACK  && received[0] == MSG_ACK) {
+        initState = INIT_START_DATA;
       }
       break;
     }
 
+    // handle brick messages in running condition
     case STATE_COLORID_RUNNING:
     case STATE_REFLECT_RUNNING:
     case STATE_AMBIENT_RUNNING:
     case STATE_REFRAW_RUNNING:
     case STATE_RGBRAW_RUNNING:
     case STATE_CALIBRATE_RUNNING: {
+      // modeswitch
       if (received[0] == MSG_SELECT) {
         if (received[1] == 0) mainState = STATE_REFLECT_SETUP;
         if (received[1] == 1) mainState = STATE_AMBIENT_SETUP;
@@ -709,7 +707,7 @@ switchEnd:
         if (received[1] == 5) mainState = STATE_CALIBRATE_SETUP;
 
       } else if ((received[0] & MASK_WRITE) == MASK_WRITE) {
-
+        // check for calibration authentication message
         if (mainState == STATE_CALIBRATE_RUNNING &&
               memcmp(&received[1], "LEGO-FAC-CAL-1", 14) == 0) {
           calAuthOk = 1;
@@ -718,7 +716,7 @@ switchEnd:
       break;
     }
   }
-  return
+  return;
 }
 
 0x8ed0 uart_rx_process(u8* pOut in X, ? in Y, u8 newFrame out A):
@@ -837,8 +835,8 @@ switchEnd:
   return
 
 0x90a4 measureReflectivity(u8 mode in A):
-  u16 color ; SP+1
-  u16 black ; SP+3
+  u16 color
+  u16 black
 
   if (mode == 1) {
     PA_ODR |=  (1 << RED1)
