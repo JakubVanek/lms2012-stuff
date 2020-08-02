@@ -66,8 +66,8 @@ code
 
 void stateMachine() {
   u16 currentMs = msCounter;
-  u8 received[?];
-  u8 transmit[?];
+  u8 received[35];
+  u8 transmit[35];
 
   if (currentMs == lastMsTick)
     goto switchEnd;
