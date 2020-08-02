@@ -62,50 +62,90 @@ u32 blueCoefficient  @ [$400c] ; real value is /1000
 code
 ----
 
-0x8092 loop():
-  SP -= 0x61
+#include <stdint.h>
 
-  u16 currentMs = msCounter
+#define true  1
+#define false 0
+
+typedef uint8_t  u8;
+typedef uint16_t u16;
+typedef uint16_t u32;
+typedef int8_t   s8;
+typedef int16_t  s16;
+typedef int16_t  s32;
+typedef float    f32;
+
+typedef enum {
+  STATE_RESTART           =  1,
+  STATE_WAIT_FOR_AUTOID   =  2,
+  STATE_UART_HANDSHAKE    =  3,
+  STATE_COLORID_SETUP     =  4,
+  STATE_COLORID_RUNNING   =  5,
+  STATE_REFLECT_SETUP     =  6,
+  STATE_REFLECT_RUNNING   =  7,
+  STATE_AMBIENT_SETUP     =  8,
+  STATE_AMBIENT_RUNNING   =  9,
+  STATE_REFRAW_SETUP      = 10,
+  STATE_REFRAW_RUNNING    = 11,
+  STATE_RGBRAW_SETUP      = 12,
+  STATE_RGBRAW_RUNNING    = 13,
+  STATE_CALIBRATE_SETUP   = 14,
+  STATE_CALIBRATE_RUNNING = 15,
+  STATE_CALIBRATE_DONE    = 16,
+} main_state_t;
+
+typedef enum {
+  LED_RED   = 0,
+  LED_GREEN = 1,
+  LED_BLUE  = 2,
+} led_t;
+
+typedef enum {
+  AMBIENT_DARK   = 1,
+  AMBIENT_BRIGHT = 2,
+} ambient_mode_t;
+
+typedef enum {
+  TX_BUSY = false,
+  TX_OK   = true,
+} tx_status_t;
+
+
+#define AUTOID_DELAY 500 // ms
+
+void stateMachine() {
+  u16 currentMs = msCounter;
+  u8 rxBuffer[?];
+  u8 txBuffer[?];
+
   if (currentMs == lastMsTick)
-    goto switchEnd
-  lastMsTick = currentMs
-  eventTimer++
-  A = mainState
-  if (A ==  1) goto $8106 ; UART restart
-  if (A ==  2) goto $8110 ; UART start
-  if (A ==  3) goto $8131 ; UART handshake
-  if (A ==  4) goto $8671 ; COL-COLOR setup
-  if (A ==  5) goto $867b ; COL-COLOR
-  if (A ==  6) goto $86a0 ; COL-REFLECT setup
-  if (A ==  7) goto $86aa ; COL-REFLECT
-  if (A ==  8) goto $86d1 ; COL-AMBIENT setup
-  if (A ==  9) goto $86db ; COL-AMBIENT
-  if (A == 10) goto $8705 ; REF-RAW setup
-  if (A == 11) goto $870e ; REF-RAW
-  if (A == 12) goto $8771 ; RGB-RAW setup
-  if (A == 13) goto $877f ; RGB-RAW
-  if (A == 14) goto $881c ; COL-CAL setup
-  if (A == 15) goto $884a ; COL-CAL
-  goto switchEnd
+    goto switchEnd;
 
-0x8106:
-; CASE A=1: restart UART
-  uart_disable()
-  mainState = 2
-  eventTimer = 0
-  goto switchEnd
+  lastMsTick = currentMs;
+  eventTimer++;
 
-0x8110:
-; CASE A=2: wait for UART start
-  if (eventTimer >= 501) {
-    uart_start()
-    eventTimer = 0
-    syncAttempts = 0
-    mainState = 3
-    initState = 2
-    wdg_refresh()
-  }
-  goto switchEnd
+  switch((main_state_t) mainState) {
+    // disable UART pins to allow the EV3 to detect this sensor using autoid
+    case STATE_RESTART:
+      uart_disable();
+      mainState  = STATE_WAIT_FOR_AUTOID;
+      eventTimer = 0;
+      break;
+
+    // wait until detection is done; then enable UART and start the handshake
+    case STATE_WAIT_FOR_AUTOID:
+      if (eventTimer > AUTOID_DELAY) {
+        uart_start();
+        eventTimer   = 0;
+        syncAttempts = 0;
+        mainState    = STATE_UART_HANDSHAKE;
+        initState    = 2;
+        wdg_refresh();
+      }
+      break;
+
+    // send sensor information to the brick
+    case STATE_UART_HANDSHAKE:
 
 ; CASE A=3: uart handshake
 0x8131:
@@ -418,188 +458,214 @@ code
   goto switchEnd
 ; end of setup
 
+      break;
 
-; CASE A=4 - COL-COLOR setup
-0x8671:
-  color_setup()
-  mainState = 5
-  firstSend = 1
-  goto switchEnd
+    // prepare COL-COLOR mode
+    case STATE_COLORID_SETUP: {
+      color_setup();
+      mainState = STATE_COLORID_RUNNING;
+      firstSend = true;
+      break;
+    }
 
-; CASE A=5 - COL-COLOR reading
-0x867b:
-  u8[$00] = measureColorCode()
-  if (lastColor != u8[$00]) goto send_col_color
-  if (firstSend == 1      ) goto send_col_color
-  goto switchEnd
-send_col_color:
-  lastColor = u8[$00]
-  u8(SP+1) = 0xC2
-  u8(SP+2) = u8[$00]
-  u8(SP+3) = 0xC2 ^ u8[$00] ^ 0xFF
-  if (uartWrite(src=SP+1, len=3))
-    firstSend = 0
-  goto switchEnd
+    // do measurements in COL-COLOR mode
+    case STATE_COLORID_RUNNING: {
+      u8 newColor = measureColorCode();
+      if (newColor != lastColor || firstSend) {
 
+        lastColor = newColor;
+        txBuffer[0] = 0xC2;
+        txBuffer[1] = newColor;
+        txBuffer[2] = txBuffer[0] ^ txBuffer[1] ^ 0xFF;
 
-; CASE A=6 - COL-REFLECT setup
-0x86a0:
-  color_setup()
-  mainState = 7
-  firstSend = 1
-  goto switchEnd
+        if (uartWrite(txBuffer, 3) == TX_OK) {
+          firstSend = false;
+        }
+      }
+      break;
+    }
 
-; CASE A=7 - COL-REFLECT reading
-0x86aa:
-  u8[$00] = measureReflectivity(channel=1)
-  if (u8[$00]   != lastReflect) goto send_col_reflect
-  if (firstSend == 1          ) goto send_col_reflect
-  goto switchEnd
-send_col_reflect:
-  lastReflect = u8[$00]
-  u8(SP+1) = 0xC0
-  u8(SP+2) = u8[$00]
-  u8(SP+3) = 0xC0 ^ u8[$00] ^ 0xFF
-  if (uartWrite(src=SP+1, len=3))
-    firstSend = 0
-  goto switchEnd
+    // prepare COL-REFLECT mode
+    case STATE_REFLECT_SETUP: {
+      color_setup();
+      mainState = STATE_REFLECT_RUNNING;
+      firstSend = true;
+      break;
+    }
 
+    // do measurements in COL-REFLECT mode
+    case STATE_REFLECT_RUNNING: {
+      u8 newReflect = measureReflectivity(LED_RED);
+      if (newReflect != lastReflect || firstSend) {
 
-; CASE A=8 - COL-AMBIENT setup
-0x86d1:
-  ambient_setup()
-  mainState = 9
-  firstSend = 1
-  goto switchEnd
+        lastReflect = newReflect;
+        txBuffer[0] = 0xC0;
+        txBuffer[1] = newReflect;
+        txBuffer[2] = txBuffer[0] ^ txBuffer[1] ^ 0xFF;
 
-; CASE A=9 - COL-AMBIENT reading
-0x86db:
-  u8[$00] = measureAmbient()
-  if (u8[$00] != lastAmbient) goto send_col_ambient
-  if (firstSend == 1        ) goto send_col_ambient
-  goto switchEnd
-send_col_ambient:
-  lastAmbient = u8[$00]
-  u8(SP+1) = 0xC1
-  u8(SP+2) = u8[$00]
-  u8(SP+3) = 0xC1 ^ u8[$00] ^ 0xFF
-  if (uartWrite(src=SP+1, len=3))
-    firstSend = 0
-  goto switchEnd
+        if (uartWrite(txBuffer, 3) == TX_OK) {
+          firstSend = false;
+        }
+      }
+      break;
+    }
 
+    // prepare COL-AMBIENT mode
+    case STATE_AMBIENT_SETUP: {
+      ambient_setup();
+      mainState = STATE_AMBIENT_RUNNING;
+      firstSend = true;
+      break;
+    }
 
-; CASE A=10 - REF-RAW setup
-0x8705:
-  color_setup()
-  mainState = 11
-  firstSend = 1
-  goto switchEnd
+    // do measurements in COL-AMBIENT mode
+    case STATE_AMBIENT_RUNNING: {
+      u8 newAmbient = measureAmbient();
+      if (newAmbient != lastAmbient || firstSend) {
 
-; CASE A=11 - REF-RAW reading
-0x870e: ; measure reflectivity
-  measureSingleColor(mode=1, pColor=SP+0x2C, pBlack=SP+0x2A)
-  if (u16(SP+0x2c) != lastRefRawFg) goto send_ref_raw
-  if (u16(SP+0x2a) != lastRefRawBg) goto send_ref_raw
-  if (firstSend    == 1           ) goto send_ref_raw
-  goto switchEnd
-send_ref_raw:
-  lastRefRawFg = u16(SP+0x2c)
-  lastRefRawBg = u16(SP+0x2a)
-  u8(SP+1) = 0xD3
-  u8(SP+2) = u8(SP+0x2d)
-  u8(SP+3) = u8(SP+0x2c)
-  u8(SP+4) = u8(SP+0x2b)
-  u8(SP+5) = u8(SP+0x2a)
-  u8(SP+6) = 0xD3 ^ u8(SP+2) ^ u8(SP+3) ^ u8(SP+4) ^ u8(SP+5) ^ 0xFF
-  if (uartWrite(src=SP+1, len=6))
-    firstSend = 0
-  goto switchEnd
+        lastAmbient = newAmbient;
+        txBuffer[0] = 0xC1;
+        txBuffer[1] = newAmbient;
+        txBuffer[2] = txBuffer[0] ^ txBuffer[1] ^ 0xFF;
 
+        if (uartWrite(txBuffer, 3) == TX_OK) {
+          firstSend = false;
+        }
+      }
+      break;
+    }
 
-; CASE A=12 - RGB-RAW setup
-0x8771:
-  color_setup()
-  mainState = 13
-  firstSend = 1
-  goto switchEnd
+    // prepare REF-RAW mode
+    case STATE_REFRAW_SETUP: {
+      color_setup();
+      mainState = STATE_REFRAW_RUNNING;
+      firstSend = true;
+      break;
+    }
 
-; CASE A=13 - RGB-RAW reading
-0x877f: ; measure rgb
-  measureAllColors(pRed=SP+0x28, pGreen=SP+0x26, pBlue=SP+0x24, pBlack=SP+0x2e)
-  if (u16(SP+0x28) != lastRefRgbR) goto send_rgb_raw
-  if (u16(SP+0x26) != lastRefRgbG) goto send_rgb_raw
-  if (u16(SP+0x24) != lastRefRgbB) goto send_rgb_raw
-  if (firstSend    == 1          ) goto send_rgb_raw
-  goto switchEnd
-send_rgb_raw:
-  lastRefRgbR = u16(SP+0x28)
-  lastRefRgbG = u16(SP+0x26)
-  lastRefRgbB = u16(SP+0x24)
-  u8(SP+1) = 0xDC
-  u8(SP+2) = u8(SP+0x29)
-  u8(SP+3) = u8(SP+0x28)
-  u8(SP+4) = u8(SP+0x27)
-  u8(SP+5) = u8(SP+0x26)
-  u8(SP+6) = u8(SP+0x25)
-  u8(SP+7) = u8(SP+0x24)
-  u8(SP+8) = u8(SP+0x2f)
-  u8(SP+9) = u8(SP+0x2e)
-  u8(SP+10) = 0xDC ^ u8(SP+2) ^ u8(SP+3) \
-                   ^ u8(SP+4) ^ u8(SP+5) \
-                   ^ u8(SP+6) ^ u8(SP+7) \
-                   ^ u8(SP+8) ^ u8(SP+9) \
-                   ^ u8(SP+10) \
-                   ^ 0xFF ; u8(SP+10) is uninitialized - this is the CRC bug
-  if (uartWrite(src=SP+1, len=10))
-    firstSend = 0
-  goto switchEnd
+    // do measurements in REF-RAW mode
+    case STATE_REFRAW_RUNNING: {
+      u16 reflect, background;
+      measureSingleColor(LED_RED, &reflect, &background);
 
-; CASE A=14 - COL-CAL setup
-0x881c:
-  color_setup()
-  u8(SP+1) = 0xDD
-  u8(SP+2) = 0x00
-  u8(SP+3) = 0x00
-  u8(SP+4) = 0x00
-  u8(SP+5) = 0x00
-  u8(SP+6) = 0x00
-  u8(SP+7) = 0x00
-  u8(SP+8) = 0x00
-  u8(SP+9) = 0x00
-  u8(SP+10) = 0xDD ^ 0xFF
-  if (uartWrite(src=SP+1, len=10)) {
-    mainState = 15
+      if (reflect != lastRefRawFg || reflect != lastRefRawBg || firstSend) {
+        lastRefRawFg = reflect;
+        lastRefRawBg = background;
+
+        txBuffer[0] = 0xD3;
+        txBuffer[1] = reflect     & 0xFF;
+        txBuffer[2] = reflect    >> 8;
+        txBuffer[3] = background  & 0xFF;
+        txBuffer[4] = background >> 8;
+        txBuffer[5] = txBuffer[0] ^ txBuffer[1] ^ txBuffer[2] ^ txBuffer[3] ^ txBuffer[4] ^ 0xFF;
+
+        if (uartWrite(txBuffer, 6) == TX_OK) {
+          firstSend = false;
+        }
+      }
+      break;
+    }
+
+    // prepare RGB-RAW mode
+    case STATE_RGBRAW_SETUP: {
+      color_setup();
+      mainState = STATE_RGBRAW_RUNNING;
+      firstSend = true;
+      break;
+    }
+
+    // do measurements in RGB-RAW mode
+    case STATE_RGBRAW_RUNNING: {
+      u16 red, green, blue, background;
+      measureAllColors(&red, &green, &blue, &background);
+
+      if (red != lastRefRgbR || green != lastRefRgbG || blue != lastRefRgbB || firstSend) {
+        lastRefRgbR = red;
+        lastRefRgbG = green;
+        lastRefRgbB = blue;
+
+        txBuffer[0] = 0xDC;
+        txBuffer[1] = red    & 0xFF;
+        txBuffer[2] = red   >> 8;
+        txBuffer[3] = green  & 0xFF;
+        txBuffer[4] = green >> 8;
+        txBuffer[5] = blue   & 0xFF;
+        txBuffer[6] = blue  >> 8;
+        txBuffer[7] = black  & 0xFF;
+        txBuffer[8] = black >> 8;
+        txBuffer[9] = txBuffer[0] ^ txBuffer[1] ^
+                      txBuffer[2] ^ txBuffer[3] ^
+                      txBuffer[4] ^ txBuffer[5] ^
+                      txBuffer[6] ^ txBuffer[7] ^ // this is the checksum bug:
+                      txBuffer[8] ^ txBuffer[9] ^ // txBuffer[9] is not initialized to zero
+                      0xFF;                       // instead it contains the old check byte
+
+        if (uartWrite(txBuffer, 10) == TX_OK) {
+          firstSend = false;
+        }
+      }
+      break;
+    }
+
+    // answer calibration request
+    case STATE_CALIBRATE_SETUP: {
+      color_setup();
+
+      txBuffer[0] = 0xDD;
+      txBuffer[1] = 0x00;
+      txBuffer[2] = 0x00;
+      txBuffer[3] = 0x00;
+      txBuffer[4] = 0x00;
+      txBuffer[5] = 0x00;
+      txBuffer[6] = 0x00;
+      txBuffer[7] = 0x00;
+      txBuffer[8] = 0x00;
+      txBuffer[9] = txBuffer[0] ^ 0xFF;
+
+      if (uartWrite(txBuffer, 10) == TX_OK) {
+        mainState = STATE_CALIBRATE_RUNNING;
+      }
+      break;
+    }
+
+    // calibrate after a valid authentication message is received
+    case STATE_CALIBRATE_RUNNING: {
+      if (!calAuthOk)
+        break;
+
+      u32 params[3];
+
+      // calibrate
+      eeprom_export(params);
+      // store
+      eeprom_store(params);
+      // reload
+      u8 ok = eeprom_import(params);
+
+      if (!ok)
+        break;
+
+      txBuffer[0] = 0xDD;
+      txBuffer[1] = (params[0]     ) & 0xFF;
+      txBuffer[2] = (params[0] >> 8) & 0xFF;
+      txBuffer[3] = (params[1]     ) & 0xFF;
+      txBuffer[4] = (params[1] >> 8) & 0xFF;
+      txBuffer[5] = (params[2]     ) & 0xFF;
+      txBuffer[6] = (params[2] >> 8) & 0xFF;
+      txBuffer[7] = 0x00;
+      txBuffer[8] = 0x00;
+      txBuffer[9] = txBuffer[0] ^ txBuffer[1] ^
+                    txBuffer[2] ^ txBuffer[3] ^
+                    txBuffer[4] ^ txBuffer[5] ^
+                    txBuffer[6] ^ 0xFF; // zero bytes are not XORed
+
+      if (uartWrite(txBuffer, 10) == TX_OK) {
+        calAuthOk = false;
+        mainState = STATE_CALIBRATE_DONE;
+      }
+    }
   }
-  goto switchEnd
 
-; CASE A=15 - COL-CAL process
-0x884a:
-  if (calAuthOk != 1)
-    goto switchEnd
-
-  eeprom_export(dst=SP+0x33)
-  eeprom_store(src=SP+0x33)
-  A = eeprom_import(src=SP+0x33)
-  if (!A) goto switchEnd
-
-  u8(SP+1) = 0xDD
-  u8(SP+2) = u8(SP+0x36)
-  u8(SP+3) = u8(SP+0x35)
-  u8(SP+4) = u8(SP+0x3A)
-  u8(SP+5) = u8(SP+0x39)
-  u8(SP+6) = u8(SP+0x3E)
-  u8(SP+7) = u8(SP+0x3D)
-  u8(SP+8) = 0x00
-  u8(SP+9) = 0x00
-  u8(SP+10) = 0xDD ^ u8(SP+2) ^ u8(SP+3) \
-                   ^ u8(SP+4) ^ u8(SP+5) \
-                   ^ u8(SP+6) ^ u8(SP+7) \
-                   ^ 0xFF
-  if (uartWrite(src=SP+1, len=10)) {
-    calAuthOk = 0
-    mainState = 16
-  }
-  goto switchEnd
 
 ; process received bytes
 switchEnd:
@@ -666,8 +732,8 @@ notSelect:
   if (u8(SP+0x4d) != '1')    goto exit
   calAuthOk = 1
 exit:
-  SP += 0x61
   return
+}
 
 0x8ed0 uart_rx_process(u8* pOut in X, ? in Y, u8 newFrame out A):
   u8 currentByte
@@ -1140,7 +1206,7 @@ exit:
   redFactor   = (float) src[0] / 1000.0f
   greenFactor = (float) src[1] / 1000.0f
   blueFactor  = (float) src[2] / 1000.0f
-  return (A = 1)
+  return true;
 
 0x9657 measureADC(channel in A, dst in X):
   ADC_CSR &= 0xF0
@@ -1398,7 +1464,7 @@ void init_memory():
   main_init1()
   uart_setup()
   while (true)
-    loop()
+    stateMachine()
 
 0x9b50 uart_disable():
   UART1_CR1 |= (1 << UARTD) ; disable uart
