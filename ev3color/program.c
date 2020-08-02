@@ -66,6 +66,7 @@ u8   frameXor;     // @ [$ac]
 // todos:
 // - convert data to C syntax
 // - reorder functions for better readability
+// - unify naming convention
 // - check if this thing compiles
 
 void stateMachine() {
@@ -107,7 +108,7 @@ void stateMachine() {
         // this state is exited through from the command processing code below the main switch
         case INIT_WAIT_FOR_SYNC:
           if (eventTimer > DELAY_BETWEEN_SYNCS) {
-            transmit[0] = MSG_SYS | SYS_SYNC;
+            transmit[0] = SYNC_MSG;
             if (uartWrite(transmit, 1) == TX_OK) {
               eventTimer = 0;
               syncAttempts++;
