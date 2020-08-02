@@ -441,7 +441,7 @@ void stateMachine() {
       u16 reflect, background;
       measureSingleColor(LED_RED, &reflect, &background);
 
-      if (reflect != lastRefRawFg || reflect != lastRefRawBg || forceSend) {
+      if (reflect != lastRefRawFg || background != lastRefRawBg || forceSend) {
         lastRefRawFg = reflect;
         lastRefRawBg = background;
 
