@@ -1,7 +1,7 @@
 # EV3 Color Sensor #exposed
 
 This folder contains findings from firmware reverse engineering of the EV3 color sensor.
-C pseudocode of the firmware can be found in [`program.c`](program.c).
+C pseudocode of the firmware can be found in [`program.c`](program.c) and [`program.h`](program.h).
 
 ## Why?
 
@@ -93,6 +93,7 @@ buffer overflows.
 ## Files
 
  - `program.c`                 - C pseudocode reverse-engineered from the flash image
+ - `program.h`                 - C header with helper macros and enums
  - `binaries/flash.bin`        - 8 KiB internal flash image (only the first 7116 bytes are used)
  - `binaries/eeprom.bin`       - 640 B internal EEPROM image (only the first 12 bytes are used)
  - `binaries/ram.bin`          - 1 KiB internal RAM image (first 173 bytes are used for global variables, last ? bytes are used for stack)

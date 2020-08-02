@@ -62,118 +62,7 @@ u32 blueCoefficient  @ [$400c] ; real value is /1000
 code
 ----
 
-#include <stdint.h>
-
-#define true  1
-#define false 0
-
-typedef uint8_t  bool;
-typedef uint8_t  u8;
-typedef uint16_t u16;
-typedef uint16_t u32;
-typedef int8_t   s8;
-typedef int16_t  s16;
-typedef int16_t  s32;
-typedef float    f32;
-
-typedef enum {
-  STATE_RESTART           =  1,
-  STATE_WAIT_FOR_AUTOID   =  2,
-  STATE_UART_HANDSHAKE    =  3,
-  STATE_COLORID_SETUP     =  4,
-  STATE_COLORID_RUNNING   =  5,
-  STATE_REFLECT_SETUP     =  6,
-  STATE_REFLECT_RUNNING   =  7,
-  STATE_AMBIENT_SETUP     =  8,
-  STATE_AMBIENT_RUNNING   =  9,
-  STATE_REFRAW_SETUP      = 10,
-  STATE_REFRAW_RUNNING    = 11,
-  STATE_RGBRAW_SETUP      = 12,
-  STATE_RGBRAW_RUNNING    = 13,
-  STATE_CALIBRATE_SETUP   = 14,
-  STATE_CALIBRATE_RUNNING = 15,
-  STATE_CALIBRATE_DONE    = 16,
-} main_state_t;
-
-typedef enum {
-  INIT_WAIT_FOR_SYNC  =  1,
-
-  INIT_SENSOR_ID =  2,
-  INIT_MODES     =  3,
-  INIT_SPEED     =  4,
-
-  INIT_COL_CAL_NAME   =  5,
-  INIT_COL_CAL_RAW    =  6,
-  INIT_COL_CAL_SI     =  7,
-  INIT_COL_CAL_FORMAT =  8,
-  INIT_COL_CAL_PAUSE  =  9,
-
-  INIT_RGB_RAW_NAME   = 10,
-  INIT_RGB_RAW_RAW    = 11,
-  INIT_RGB_RAW_SI     = 12,
-  INIT_RGB_RAW_FORMAT = 13,
-  INIT_RGB_RAW_PAUSE  = 14,
-
-  INIT_REF_RAW_NAME   = 15,
-  INIT_REF_RAW_RAW    = 16,
-  INIT_REF_RAW_SI     = 17,
-  INIT_REF_RAW_FORMAT = 18,
-  INIT_REF_RAW_PAUSE  = 19,
-
-  INIT_COL_COLOR_NAME   = 20,
-  INIT_COL_COLOR_RAW    = 21,
-  INIT_COL_COLOR_SI     = 22,
-  INIT_COL_COLOR_SYMBOL = 23,
-  INIT_COL_COLOR_FORMAT = 24,
-  INIT_COL_COLOR_PAUSE  = 25,
-
-  INIT_COL_AMBIENT_NAME   = 26,
-  INIT_COL_AMBIENT_RAW    = 27,
-  INIT_COL_AMBIENT_SI     = 28,
-  INIT_COL_AMBIENT_SYMBOL = 29,
-  INIT_COL_AMBIENT_FORMAT = 30,
-  INIT_COL_AMBIENT_PAUSE  = 31,
-
-  INIT_COL_REFLECT_NAME   = 32,
-  INIT_COL_REFLECT_RAW    = 33,
-  INIT_COL_REFLECT_SI     = 34,
-  INIT_COL_REFLECT_SYMBOL = 35,
-  INIT_COL_REFLECT_FORMAT = 36,
-  INIT_COL_REFLECT_PAUSE  = 37,
-
-  INIT_SEND_ACK     = 38,
-  INIT_WAIT_FOR_ACK = 39,
-  INIT_START_DATA   = 40,
-
-} init_state_t;
-
-typedef enum {
-  LED_RED   = 0,
-  LED_GREEN = 1,
-  LED_BLUE  = 2,
-} led_t;
-
-typedef enum {
-  AMBIENT_DARK   = 1,
-  AMBIENT_BRIGHT = 2,
-} ambient_mode_t;
-
-typedef enum {
-  TX_BUSY = false,
-  TX_OK   = true,
-} tx_status_t;
-
-#define MSG_SYNC   0x00
-#define MSG_NACK   0x02
-#define MSG_ACK    0x04
-#define MSG_SELECT 0x43
-#define MASK_WRITE 0x44
-
-#define AUTOID_DELAY        500 // ms
-#define DELAY_BETWEEN_SYNCS   6 // ms
-#define MAX_SYNC_ATTEMPTS    10
-#define INTERMODE_PAUSE      30 // ms
-#define ACK_TIMEOUT          80 // ms
+#include "program.h"
 
 void stateMachine() {
   u16 currentMs = msCounter;
@@ -214,7 +103,7 @@ void stateMachine() {
         // this state is exited through from the command processing code below the main switch
         case INIT_WAIT_FOR_SYNC:
           if (eventTimer > DELAY_BETWEEN_SYNCS) {
-            transmit[0] = MSG_SYNC;
+            transmit[0] = MSG_SYS | SYS_SYNC;
             if (uartWrite(transmit, 1) == TX_OK) {
               eventTimer = 0;
               syncAttempts++;
@@ -474,7 +363,7 @@ void stateMachine() {
       if (newColor != lastColor || forceSend) {
 
         lastColor = newColor;
-        transmit[0] = 0xC2;
+        transmit[0] = DATA_MSG(COL_CAL) | MSGLEN_1;
         transmit[1] = newColor;
         transmit[2] = transmit[0] ^ transmit[1] ^ 0xFF;
 
@@ -499,7 +388,7 @@ void stateMachine() {
       if (newReflect != lastReflect || forceSend) {
 
         lastReflect = newReflect;
-        transmit[0] = 0xC0;
+        transmit[0] = DATA_MSG(COL_REFLECT) | MSGLEN_1;
         transmit[1] = newReflect;
         transmit[2] = transmit[0] ^ transmit[1] ^ 0xFF;
 
@@ -524,7 +413,7 @@ void stateMachine() {
       if (newAmbient != lastAmbient || forceSend) {
 
         lastAmbient = newAmbient;
-        transmit[0] = 0xC1;
+        transmit[0] = DATA_MSG(COL_AMBIENT) | MSGLEN_1;
         transmit[1] = newAmbient;
         transmit[2] = transmit[0] ^ transmit[1] ^ 0xFF;
 
@@ -552,7 +441,7 @@ void stateMachine() {
         lastRefRawFg = reflect;
         lastRefRawBg = background;
 
-        transmit[0] = 0xD3;
+        transmit[0] = DATA_MSG(REF_RAW) | MSGLEN_4;
         transmit[1] = reflect     & 0xFF;
         transmit[2] = reflect    >> 8;
         transmit[3] = background  & 0xFF;
@@ -584,7 +473,7 @@ void stateMachine() {
         lastRefRgbG = green;
         lastRefRgbB = blue;
 
-        transmit[0] = 0xDC;
+        transmit[0] = DATA_MSG(RGB_RAW) | MSGLEN_8;
         transmit[1] = red    & 0xFF;
         transmit[2] = red   >> 8;
         transmit[3] = green  & 0xFF;
@@ -611,7 +500,7 @@ void stateMachine() {
     case STATE_CALIBRATE_SETUP: {
       color_setup();
 
-      transmit[0] = 0xDD;
+      transmit[0] = DATA_MSG(COL_CAL) | MSGLEN_8;
       transmit[1] = 0x00;
       transmit[2] = 0x00;
       transmit[3] = 0x00;
@@ -644,7 +533,7 @@ void stateMachine() {
       if (!ok)
         break;
 
-      transmit[0] = 0xDD;
+      transmit[0] = DATA_MSG(COL_CAL) | MSGLEN_8;
       transmit[1] = (params[0]     ) & 0xFF;
       transmit[2] = (params[0] >> 8) & 0xFF;
       transmit[3] = (params[1]     ) & 0xFF;
@@ -672,7 +561,7 @@ switchEnd:
     return;
 
   // NACK => resend data + refresh watchdog
-  if (received[0] == MSG_NACK) {
+  if (received[0] == NACK_MSG) {
     wdg_refresh();
     forceSend = true;
     return;
@@ -681,10 +570,10 @@ switchEnd:
   switch ((main_state_t) mainState) {
     // handle brick messages in handshake
     case STATE_UART_HANDSHAKE: {
-      if (initState == INIT_WAIT_FOR_SYNC && received[0] == MSG_SYNC) {
+      if (initState == INIT_WAIT_FOR_SYNC && received[0] == SYNC_MSG) {
         initState = INIT_SENSOR_ID;
       }
-      if (initState == INIT_WAIT_FOR_ACK  && received[0] == MSG_ACK) {
+      if (initState == INIT_WAIT_FOR_ACK  && received[0] == ACK_MSG) {
         initState = INIT_START_DATA;
       }
       break;
@@ -698,15 +587,15 @@ switchEnd:
     case STATE_RGBRAW_RUNNING:
     case STATE_CALIBRATE_RUNNING: {
       // modeswitch
-      if (received[0] == MSG_SELECT) {
-        if (received[1] == 0) mainState = STATE_REFLECT_SETUP;
-        if (received[1] == 1) mainState = STATE_AMBIENT_SETUP;
-        if (received[1] == 2) mainState = STATE_COLORID_SETUP;
-        if (received[1] == 3) mainState = STATE_REFRAW_SETUP;
-        if (received[1] == 4) mainState = STATE_RGBRAW_SETUP;
-        if (received[1] == 5) mainState = STATE_CALIBRATE_SETUP;
+      if (received[0] == SELECT_MSG) {
+        if (received[1] == COL_REFLECT) mainState = STATE_REFLECT_SETUP;
+        if (received[1] == COL_AMBIENT) mainState = STATE_AMBIENT_SETUP;
+        if (received[1] == COL_COLOR)   mainState = STATE_COLORID_SETUP;
+        if (received[1] == REF_RAW)     mainState = STATE_REFRAW_SETUP;
+        if (received[1] == RGB_RAW)     mainState = STATE_RGBRAW_SETUP;
+        if (received[1] == COL_CAL)     mainState = STATE_CALIBRATE_SETUP;
 
-      } else if ((received[0] & MASK_WRITE) == MASK_WRITE) {
+      } else if ((received[0] & WRITE_MSG) == WRITE_MSG) {
         // check for calibration authentication message
         if (mainState == STATE_CALIBRATE_RUNNING &&
               memcmp(&received[1], "LEGO-FAC-CAL-1", 14) == 0) {
