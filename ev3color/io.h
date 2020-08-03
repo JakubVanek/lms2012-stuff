@@ -24,6 +24,7 @@
 
 #define FLASH_DUKR  (*((u8*) 0x5064))
 #define FLASH_IAPSR (*((u8*) 0x505f))
+#define EOP 2
 
 #define CLK_CKDIVR  (*((u8*) 0x50c6))
 

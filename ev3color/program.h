@@ -183,4 +183,53 @@ typedef enum {
 
 #define DEVICE_ID_COLOR_SENSOR 29
 
+// fake memcpy
+void *memcpy(void *dst, u16 src, u16 length);
+int memcmp(const u8 *a, const char *b, u16 length);
+
+void _start(void);
+void abort(void);
+void main(void);
+void update(void);
+void initialize(void);
+void tick_setup(void);
+void gpio_setup(void);
+void measurement_setup(void);
+void adc_setup(void);
+void wdg_setup(void);
+void wdg_refresh(void);
+void eeprom_load(u32 *params);
+void eeprom_store(u32 *params);
+
+u16          measure_ambient(void);
+u8           measure_reflect(led_t mode);
+color_code_t measure_color_code(void);
+color_code_t color_identify(u16 red, u16 green, u16 blue);
+void         measure_raw_reflect(led_t mode, u16 *pColor, u16 *pBlack);
+void         measure_raw_rgb(u16* pRed, u16* pGreen, u16* pBlue, u16* pBlack);
+void         do_adc(adc_channel_t channel, u16 *pDst);
+void         do_adc_timed(adc_channel_t channel, u16 *pDst, u8 time);
+void         calibration_process(u16* pRed, u16* pGreen, u16* pBlue);
+void         calibration_perform(u32 *params);
+u8           calibration_import(u32 *params);
+void         ambient_setup(void);
+void         color_setup(void);
+tx_status_t  uart_transmit(u8 *data, u8 length);
+u8           uart_receive(u8* pOut);
+void         uart_rxbuf_rewind(void);
+void         uart_enable(void);
+void         uart_disable(void);
+void         uart_setup(void);
+void         uart_ground_pins(void);
+tx_status_t  uart_enter_hispeed(void);
+
+void irq_millisecond_tick(void);
+void irq_10microsecond_tick(void);
+void irq_uart_tx(void);
+void irq_uart_rx(void);
+void irq_bad(void);
+
+u16 LUT1[60];
+u16 LUT2[50];
+
 #endif

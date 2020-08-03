@@ -33,8 +33,8 @@ u16  lastRefRgbG;  // @ [$8e]
 u16  lastRefRgbB;  // @ [$90]
 u16  lastMsTick;   // @ [$92]
 u16  eventTimer;   // @ [$94]
-u16 *txTarget;     // @ [$96]
-u16 *rxTarget;     // @ [$98]
+u8  *txTarget;     // @ [$96]
+u8  *rxTarget;     // @ [$98]
 u32 *eepromPtr;    // @ [$9a] ; never read
 u16  msCounter;    // @ [$9c]
 u8   forceSend;    // @ [$9e]
@@ -64,7 +64,7 @@ u8   frameXor;     // @ [$ac]
 // ----
 
 // at address 0x99dc
-void _start() {
+void _start(void) {
   setStackPointer(0x03ff);
 
   // memset(0x0013, 0x00, 154); // implicit in C
@@ -78,14 +78,14 @@ void _start() {
 }
 
 // at address 0x9b31
-void main() {
+void main(void) {
   initialize();
   uart_setup();
   while (true)
     update();
 }
 
-void update() {
+void update(void) {
   u16 currentMs = msCounter;
   u8 received[35];
   u8 transmit[35];
@@ -486,8 +486,8 @@ void update() {
 
     // do measurements in RGB-RAW mode
     case STATE_RGBRAW_RUNNING: {
-      u16 red, green, blue, background;
-      measure_raw_rgb(&red, &green, &blue, &background);
+      u16 red, green, blue, black;
+      measure_raw_rgb(&red, &green, &blue, &black);
 
       if (red != lastRefRgbR || green != lastRefRgbG || blue != lastRefRgbB || forceSend) {
         lastRefRgbR = red;
@@ -575,9 +575,9 @@ void update() {
     }
   }
 
-switchEnd:
+switchEnd: /* dummy */ ;
 
-  bool hasNewData = uart_receive(received);
+  u8 hasNewData = uart_receive(received);
   if (!hasNewData)
     return;
 
@@ -633,9 +633,11 @@ switchEnd:
 // Measurement procedures
 
 // at address 0x92d9
-u16 measure_ambient(u16 brightness out X) {
+u16 measure_ambient(void) {
   u16 measurement;
   do_adc(ADC_AMBIENT, &measurement);
+
+  u16 brightness;
 
   if (ambientMode == AMBIENT_DARK) {
     if (measurement >= 801) {
@@ -646,7 +648,7 @@ u16 measure_ambient(u16 brightness out X) {
     }
 
     brightness = 0;
-    for (u8 i = 0, i <= 60, i++) {
+    for (u8 i = 0; i <= 60; i++) {
       if (LUT1[i] >= measurement)
         break;
       brightness = i; // possible off-by-one error in translation to C
@@ -660,7 +662,7 @@ u16 measure_ambient(u16 brightness out X) {
     }
 
     brightness = 50;
-    for (u8 i = 0, i <= 50, i++) {
+    for (u8 i = 0; i <= 50; i++) {
       if (LUT2[i] >= measurement)
         break;
       brightness = i + 50; // possible off-by-one error in translation to C
@@ -673,6 +675,8 @@ u16 measure_ambient(u16 brightness out X) {
   do_adc_timed(ADC_AMBIENT, &measurement, 1);
   PC_ODR &= ~(1 << BLUE1);
   PC_ODR &= ~(1 << BLUE2);
+
+  return brightness;
 }
 
 
@@ -719,7 +723,7 @@ u8 measure_reflect(led_t mode) {
 }
 
 // at address 0x977c
-color_code_t measure_color_code() {
+color_code_t measure_color_code(void) {
   u16 red, green, blue, black;
 
   measure_raw_rgb(&red, &green, &blue, &black);
@@ -798,7 +802,7 @@ void measure_raw_reflect(led_t mode, u16 *pColor, u16 *pBlack) {
 void measure_raw_rgb(u16* pRed, u16* pGreen, u16* pBlue, u16* pBlack) {
   u16 black1, black2;
 
-  do_adc(ADC_COLOR, &black1, 4);
+  do_adc(ADC_COLOR, &black1);
 
   PA_ODR |= (1 << RED1);
   PA_ODR |= (1 << RED2);
@@ -820,7 +824,7 @@ void measure_raw_rgb(u16* pRed, u16* pGreen, u16* pBlue, u16* pBlack) {
 
   do_adc_timed(ADC_COLOR, &black2, 4);
 
-  *pBlack = (black1 + black) / 2;
+  *pBlack = (black1 + black2) / 2;
 
   if (*pRed < *pBlack) {
     *pRed = *pBlack - *pRed;
@@ -882,7 +886,7 @@ void do_adc_timed(adc_channel_t channel, u16 *pDst, u8 time) {
 }
 
 // at address 0x9a22
-void irq_10microsecond_tick() {
+void irq_10microsecond_tick(void) {
   TIM1_SR1 &= ~UIF;
   us10Counter++;
 }
@@ -907,7 +911,7 @@ u8 calibration_import(u32 *params) {
 }
 
 // at address 0x97b8
-void ambient_setup() {
+void ambient_setup(void) {
   PA_ODR &= ~(1 << RED1);
   PA_ODR &= ~(1 << RED2);
   PA_ODR &= ~(1 << GREEN1);
@@ -925,7 +929,7 @@ void ambient_setup() {
 }
 
 // at address 0x9a01
-void color_setup() {
+void color_setup(void) {
   PC_DDR &= ~(1 << CAP);
   PC_CR1 &= ~(1 << CAP);
   PC_DDR &= ~(1 << BRIGHT);
@@ -959,7 +963,7 @@ tx_status_t uart_transmit(u8 *data, u8 length) {
 }
 
 // at address 0x988d
-void irq_uart_tx() {
+void irq_uart_tx(void) {
   if (txRemaining == 0) {
     UART1_CR2 &= ~(1 << TIEN); // disable tx interrupt
     txActive = 0;
@@ -1017,7 +1021,7 @@ u8 uart_receive(u8* pOut) {
     // calculate check byte + copy to output buffer
     u8* xorPtr = &frame[0];
     u8 xorCount;
-    for (xorCount = 0, xorCount < frameLength-1, xorCount++) {
+    for (xorCount = 0; xorCount < frameLength-1; xorCount++) {
       frameXor ^= *xorPtr;
       *pOut++   = *xorPtr++;
     }
@@ -1043,7 +1047,7 @@ u8 uart_receive(u8* pOut) {
 }
 
 // at address 0x98e0
-void irq_uart_rx() {
+void irq_uart_rx(void) {
   *rxTarget = UART1_DR;
   rxTarget++;
   rxWritePtr++;
@@ -1053,14 +1057,14 @@ void irq_uart_rx() {
 }
 
 // at address 0x9b26
-void uart_rxbuf_rewind() {
+void uart_rxbuf_rewind(void) {
   rxTarget = &rxBuffer[0];
   rxWritePtr = 0;
 }
 
 
 // at address 0x9869
-void uart_enable() {
+void uart_enable(void) {
   // 2400 baud
   UART1_BRR2 = 0x1A;
   UART1_BRR1 = 0xA0;
@@ -1074,13 +1078,13 @@ void uart_enable() {
 }
 
 // at address 0x9b50
-void uart_disable() {
+void uart_disable(void) {
   UART1_CR1 |= (1 << UARTD); // disable uart
   uart_ground_pins();
 }
 
 // at address 0x9a12
-void uart_setup() {
+void uart_setup(void) {
   uart_ground_pins();
   PD_DDR &= ~(1 << UART_RX);
   PD_CR1 &= ~(1 << UART_RX);
@@ -1088,14 +1092,14 @@ void uart_setup() {
 }
 
 // at address 0x9a2f
-void uart_ground_pins() {
+void uart_ground_pins(void) {
   PD_DDR |=  (1 << UART_TX);
   PD_ODR &= ~(1 << UART_TX);
   PD_CR1 |=  (1 << UART_TX);
 }
 
 // at address 0x99ef
-tx_status_t uart_enter_hispeed() {
+tx_status_t uart_enter_hispeed(void) {
   if (txActive)
     return TX_BUSY;
 
@@ -1110,14 +1114,14 @@ tx_status_t uart_enter_hispeed() {
 // Initialization procedures
 
 // at address 0x9a54
-void initialize() {
+void initialize(void) {
   tick_setup();
   gpio_setup();
   measurement_setup();
 }
 
 // at address 0x991a
-void tick_setup() {
+void tick_setup(void) {
   CLK_CKDIVR = 0; // HSI clock = CPU clock = master clock = 16 MHz
   TIM2_CR1   = 1;
     // ARPE = 0: do not buffer ARR
@@ -1132,13 +1136,13 @@ void tick_setup() {
 }
 
 // at address 0x9a48
-void irq_millisecond_tick() {
+void irq_millisecond_tick(void) {
   TIM2_SR1 &= ~UIF;
   msCounter++;
 }
 
 // at address 0x9169
-void gpio_setup() {
+void gpio_setup(void) {
   // inputs
   PD_DDR &= ~(1 << COLOR);
   PD_CR1 &= ~(1 << COLOR);
@@ -1207,7 +1211,7 @@ void gpio_setup() {
 }
 
 // at address 0x9964
-void measurement_setup() {
+void measurement_setup(void) {
   u32 params[3];
 
   wdg_setup();
@@ -1217,7 +1221,7 @@ void measurement_setup() {
 }
 
 // at address 0x9979
-void adc_setup() {
+void adc_setup(void) {
   ADC_CSR &= 0xF0; // reset channel
   ADC_CSR |= AIN4; // set channel to color
   ADC_CSR &= ~(1 << EOC);  // clear end of conversion
@@ -1225,14 +1229,14 @@ void adc_setup() {
 }
 
 // at address 0x9bba
-void irq_bad() {
+void irq_bad(void) {
   while (true) {
     asm("nop");
   }
 }
 
 // at address 0x9bae
-void abort() {
+void abort(void) {
   while(true) {}
 }
 
@@ -1241,7 +1245,7 @@ void abort() {
 // Watchdog configuration
 
 // at address 0x9934
-void wdg_setup() {
+void wdg_setup(void) {
   IWDG_KR  = KEY_ENABLE;
   IWDG_KR  = KEY_ACCESS;
   IWDG_PR  = 0x06; // /256 prescaler => 250 Hz clock
@@ -1251,7 +1255,7 @@ void wdg_setup() {
 }
 
 // at address 0x9ba9
-void wdg_refresh() {
+void wdg_refresh(void) {
   IWDG_KR = KEY_REFRESH;
 }
 
