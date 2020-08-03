@@ -139,9 +139,7 @@ typedef enum {
 #define MSG_DATA   0xC0
 
 #define SYS_SYNC   0x00
-#define SYS_MODES  0x01
 #define SYS_NACK   0x02
-#define SYS_SELECT 0x03
 #define SYS_ACK    0x04
 
 #define CMD_TYPE   0x00
@@ -149,6 +147,13 @@ typedef enum {
 #define CMD_SPEED  0x02
 #define CMD_SELECT 0x03
 #define CMD_WRITE  0x04
+
+#define INFO_NAME    0x00
+#define INFO_RAW     0x01
+#define INFO_PCT     0x02
+#define INFO_SI      0x03
+#define INFO_SYMBOL  0x04
+#define INFO_FORMAT  0x80
 
 #define COL_REFLECT 0
 #define COL_AMBIENT 1
@@ -175,5 +180,7 @@ typedef enum {
 #define SYNC_MSG   (MSG_SYS | SYS_SYNC)
 #define SELECT_MSG (MSG_CMD | CMD_SELECT)
 #define WRITE_MSG  (MSG_CMD | CMD_WRITE)
+
+#define DEVICE_ID_COLOR_SENSOR 29
 
 #endif
