@@ -345,7 +345,7 @@ void update() {
         case INIT_SEND_ACK:
           frameLength = 0; // initialize incoming frame decoding
 
-          transmit[0] = MSG_ACK;
+          transmit[0] = ACK_MSG;
           if (uart_transmit(transmit, 1) == TX_OK) {
             initState  = INIT_WAIT_FOR_ACK;
             eventTimer = 0;
