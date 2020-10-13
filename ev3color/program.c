@@ -75,6 +75,9 @@ u32 *eepromPtr;    // @ [$9a] ; never read, set to EEPROM_GRN_COEF
 // code
 // ----
 
+/**
+ * @brief Reset vector of the processor
+ */
 // at address 0x99dc
 void _start(void) {
   setStackPointer(0x03ff);
@@ -89,6 +92,9 @@ void _start(void) {
   abort();
 }
 
+/**
+ * @brief Program entrypoint
+ */
 // at address 0x9b31
 void main(void) {
   initialize();
@@ -97,18 +103,27 @@ void main(void) {
     update();
 }
 
+/**
+ * @brief Sensor state machine
+ */
 void update(void) {
   u16 currentMs = msCounter;
   u8 received[35];
   u8 transmit[35];
 
+  // if we're still in the same millisecond as the last execution, skip this
+  // -> this loop executes at 1000 Hz rate (if not blocked)
   if (currentMs == lastMsTick)
     goto switchEnd;
 
   lastMsTick = currentMs;
   eventTimer++;
 
+  // primary sensor state
   switch((main_state_t) mainState) {
+    ////
+    //// Sensor initialization
+    ////
     // disable UART pins to allow the EV3 to detect this sensor using autoid
     case STATE_RESTART:
       uart_disable();
@@ -128,6 +143,9 @@ void update(void) {
       }
       break;
 
+    ////
+    //// Sensor handshake
+    ////
     // send sensor information to the brick
     case STATE_UART_HANDSHAKE:
       switch ((init_state_t) initState) {
@@ -343,7 +361,7 @@ void update(void) {
 
         case INIT_COL_REFLECT_FORMAT:
           memcpy(transmit, 0x9b60, 7);
-          if (uart_transmit(transmit, 7) == TX_OK) {
+          if (uart_transmit(traninitializationsmit, 7) == TX_OK) {
             initState    = INIT_COL_REFLECT_PAUSE;
             pauseCounter = 0;
           } break;
@@ -364,14 +382,15 @@ void update(void) {
           }
           break;
 
-        // wait for ACK reploy
-        // this state is exited through the command processing code below the main switch
+        // wait for ACK reply
+        // this state is exited through the EV3 command processing code below the main switch
         case INIT_WAIT_FOR_ACK:
           if (eventTimer > ACK_TIMEOUT) {
             mainState = STATE_RESTART;
           }
           break;
 
+        // switch to high baudrate + switch to data mode
         case INIT_START_DATA:
           if (uart_enter_hispeed() == TX_OK) {
             wdg_refresh();
@@ -381,6 +400,10 @@ void update(void) {
           break;
       }
       break;
+
+    ////
+    //// Individual sensor modes
+    ////
 
     // prepare COL-COLOR mode
     case STATE_COLORID_SETUP: {
@@ -552,20 +575,21 @@ void update(void) {
 
     // calibrate after a valid authentication message is received
     case STATE_CALIBRATE_RUNNING: {
-      if (!calAuthOk)
+      if (!calAuthOk) // unlock message is parsed below in the EV3 command processing code
         break;
 
       u32 params[3];
 
-      // calibrate
+      // perform measurements + calculate calibration coefficients
       calibration_perform(params);
-      // store
+      // store them
       eeprom_store(params);
-      // reload
+      // and reload them
       u8 ok = calibration_import(params);
       if (!ok)
         break;
 
+      // send new parameters to the brick
       transmit[0] = MSG_DATA | COL_CAL | MSGLEN_8;
       transmit[1] = (params[0]     ) & 0xFF;
       transmit[2] = (params[0] >> 8) & 0xFF;
@@ -585,6 +609,11 @@ void update(void) {
         mainState = STATE_CALIBRATE_DONE;
       }
     }
+
+    case STATE_CALIBRATE_DONE: {
+      // no code
+      break;
+    }
   }
 
 switchEnd: /* dummy */ ;
@@ -593,21 +622,22 @@ switchEnd: /* dummy */ ;
   if (!hasNewData)
     return;
 
-  // NACK => resend data + refresh watchdog
+  // NACK => force send current measurements + refresh watchdog
   if (received[0] == NACK_MSG) {
     wdg_refresh();
     forceSend = true;
     return;
   }
 
+  // commands are dependent on sensor state
   switch ((main_state_t) mainState) {
     // handle brick messages in handshake
     case STATE_UART_HANDSHAKE: {
       if (initState == INIT_WAIT_FOR_SYNC && received[0] == SYNC_MSG) {
-        initState = INIT_SENSOR_ID;
+        initState = INIT_SENSOR_ID; // ok, start handshake
       }
       if (initState == INIT_WAIT_FOR_ACK  && received[0] == ACK_MSG) {
-        initState = INIT_START_DATA;
+        initState = INIT_START_DATA; // ok, start data mode
       }
       break;
     }
@@ -619,7 +649,7 @@ switchEnd: /* dummy */ ;
     case STATE_REFRAW_RUNNING:
     case STATE_RGBRAW_RUNNING:
     case STATE_CALIBRATE_RUNNING: {
-      // modeswitch
+      // this is a request for switching modes
       if (received[0] == SELECT_MSG) {
         if (received[1] == COL_REFLECT) mainState = STATE_REFLECT_SETUP;
         if (received[1] == COL_AMBIENT) mainState = STATE_AMBIENT_SETUP;
@@ -628,6 +658,7 @@ switchEnd: /* dummy */ ;
         if (received[1] == RGB_RAW)     mainState = STATE_RGBRAW_SETUP;
         if (received[1] == COL_CAL)     mainState = STATE_CALIBRATE_SETUP;
 
+      // this is a sensor write request
       } else if ((received[0] & WRITE_MSG) == WRITE_MSG) {
         // check for calibration authentication message
         if (mainState == STATE_CALIBRATE_RUNNING &&
@@ -644,6 +675,10 @@ switchEnd: /* dummy */ ;
 ///////////////////////////
 // Measurement procedures
 
+/**
+ * @brief Measure how much ambient light is hitting the sensor
+ * @returns Integer in range 0~100
+ */
 // at address 0x92d9
 u16 measure_ambient(void) {
   u16 measurement;
@@ -651,8 +686,9 @@ u16 measure_ambient(void) {
 
   u16 brightness;
 
+  // low reception -> turn off signal attenuation
   if (ambientMode == AMBIENT_DARK) {
-    if (measurement >= 801) {
+    if (measurement >= 801) { // switch to bright if needed
       PC_DDR |=  (1 << BRIGHT);
       PC_ODR &= ~(1 << BRIGHT);
       PC_CR1 |=  (1 << BRIGHT);
@@ -666,8 +702,9 @@ u16 measure_ambient(void) {
       brightness = i; // possible off-by-one error in translation to C
     }
 
+  // high reception -> turn on signal attenuation
   } else if (ambientMode == AMBIENT_BRIGHT) {
-    if (measurement < 15) {
+    if (measurement < 15) { // switch to dark if needed
       PC_DDR &= ~(1 << BRIGHT);
       PC_CR1 &= ~(1 << BRIGHT);
       ambientMode = AMBIENT_DARK;
@@ -691,19 +728,26 @@ u16 measure_ambient(void) {
   return brightness;
 }
 
-
+/**
+ * @brief Measure how much reflected light is hitting the sensor
+ * The illumination is provided by the red LED in the sensor.
+ * One measurement should take around 180 us - 130 us with LED on, 50 us with LED off.
+ * @returns Integer in range 0~100
+ */
 // at address 0x90a4
 u8 measure_reflect(led_t mode) {
   u16 color, black;
 
+  // flash the red LED
   if (mode == LED_RED) {
     PA_ODR |=  (1 << RED1);
     PA_ODR |=  (1 << RED2);
-    do_adc_timed(ADC_COLOR, &color, 12);
+    do_adc_timed(ADC_COLOR, &color, 12); // + 1 -> 130 us total
     PA_ODR &= ~(1 << RED1);
     PA_ODR &= ~(1 << RED2);
-    do_adc_timed(ADC_COLOR, &black, 4);
+    do_adc_timed(ADC_COLOR, &black, 4); // + 1 -> 50 us total
 
+  // flash the green LED
   } else if (mode == LED_GREEN) {
     PC_ODR |=  (1 << GREEN1);
     PA_ODR |=  (1 << GREEN2);
@@ -712,6 +756,7 @@ u8 measure_reflect(led_t mode) {
     PA_ODR &= ~(1 << GREEN2);
     do_adc_timed(ADC_COLOR, &black, 4);
 
+  // flash the blue LED
   } else if (mode == LED_BLUE) {
     PC_ODR |=  (1 << BLUE1);
     PC_ODR |=  (1 << BLUE2);
@@ -721,12 +766,14 @@ u8 measure_reflect(led_t mode) {
     do_adc_timed(ADC_COLOR, &black, 4);
   }
 
+  // calculate bg-fg difference
   if (color >= black) {
     color = color - black;
   } else {
     color = black - color;
   }
 
+  // and apply calibration to the result
   u8 result  = (u16)( (float) color * redFactor / 4.09f );
   if (result > 100)
     result = 100;
@@ -734,6 +781,10 @@ u8 measure_reflect(led_t mode) {
   return result;
 }
 
+/**
+ * @brief Measure EV3 color code of the surface that the sensor is pointed at
+ * @returns COLOR_*
+ */
 // at address 0x977c
 color_code_t measure_color_code(void) {
   u16 red, green, blue, black;
@@ -743,6 +794,12 @@ color_code_t measure_color_code(void) {
   return color_identify(red, green, blue);
 }
 
+/**
+ * @brief Apply calibration to raw RGB values for color code decision
+ * @param pRed   measured ADC response (in) + calibrated reflectivity (out) for red
+ * @param pGreen measured ADC response (in) + calibrated reflectivity (out) for green
+ * @param pBlue  measured ADC response (in) + calibrated reflectivity (out) for blue
+ */
 // at address 0x96ad
 void calibration_process(u16* pRed, u16* pGreen, u16* pBlue) {
   *pRed   = (u16)( (float)(*pRed)   * redFactor   );
@@ -750,6 +807,13 @@ void calibration_process(u16* pRed, u16* pGreen, u16* pBlue) {
   *pBlue  = (u16)( (float)(*pBlue)  * blueFactor  );
 }
 
+/**
+ * @brief Decide what color do the measured values correspond to
+ * @param red   calibrated red   reflectivity
+ * @param green calibrated green reflectivity
+ * @param blue  calibrated blue  reflectivity
+ * @returns COLOR_*
+ */
 // at address 0x9222
 color_code_t color_identify(u16 red, u16 green, u16 blue) {
   float fRed   = (float) red;
@@ -779,6 +843,12 @@ color_code_t color_identify(u16 red, u16 green, u16 blue) {
   return COLOR_BLACK;
 }
 
+/**
+ * @brief Measure raw reflectivity (bg + fg ADC response)
+ * @param mode which LED to flash
+ * @param pColor ADC response with LED on
+ * @param pBlack ADC response with LED off
+ */
 // at address 0x940c
 void measure_raw_reflect(led_t mode, u16 *pColor, u16 *pBlack) {
   if (mode == LED_RED) {
@@ -810,34 +880,49 @@ void measure_raw_reflect(led_t mode, u16 *pColor, u16 *pBlack) {
   }
 }
 
+/**
+ * @brief Measure raw RGB reflectivity (offsets a bg ADC response)
+ * The measurement should take around 200 us to complete.
+ * @param pRed   Difference between background and red LED on response
+ * @param pGreen Difference between background and green LED on response
+ * @param pBlue  Difference between background and blue LED on response
+ * @param pBlack Background ADC response
+ */
 // at address 0x8fbd
 void measure_raw_rgb(u16* pRed, u16* pGreen, u16* pBlue, u16* pBlack) {
   u16 black1, black2;
 
+  // measure background
   do_adc(ADC_COLOR, &black1);
 
+  // measure red
   PA_ODR |= (1 << RED1);
   PA_ODR |= (1 << RED2);
-  do_adc_timed(ADC_COLOR, pRed, 4);
+  do_adc_timed(ADC_COLOR, pRed, 4); // +1 -> 50 us
   PA_ODR &= ~(1 << RED1);
   PA_ODR &= ~(1 << RED2);
 
+  // measure green
   PA_ODR |=  (1 << GREEN1);
   PC_ODR |=  (1 << GREEN2);
-  do_adc_timed(ADC_COLOR, pGreen, 4);
+  do_adc_timed(ADC_COLOR, pGreen, 4); // +1 -> 50 us
   PA_ODR &= ~(1 << GREEN1);
   PC_ODR &= ~(1 << GREEN2);
 
+  // measure blue
   PC_ODR |=  (1 << BLUE1);
   PC_ODR |=  (1 << BLUE2);
-  do_adc_timed(ADC_COLOR, pBlue, 4);
+  do_adc_timed(ADC_COLOR, pBlue, 4); // +1 -> 50 us
   PC_ODR &= ~(1 << BLUE1);
   PC_ODR &= ~(1 << BLUE2);
 
-  do_adc_timed(ADC_COLOR, &black2, 4);
+  // measure black again
+  do_adc_timed(ADC_COLOR, &black2, 4); // +1 -> 50 us
 
+  // -> average
   *pBlack = (black1 + black2) / 2;
 
+  // and calculate offsets
   if (*pRed < *pBlack) {
     *pRed = *pBlack - *pRed;
   } else {
@@ -857,6 +942,11 @@ void measure_raw_rgb(u16* pRed, u16* pGreen, u16* pBlue, u16* pBlack) {
   }
 }
 
+/**
+ * @brief Do a single ADC measurement
+ * @param channel Which ADC channel to use (AIN3 is for ambient, AIN4 is for reflectivity)
+ * @param pDst Where to put the value
+ */
 // at address 0x9657
 void do_adc(adc_channel_t channel, u16 *pDst) {
   ADC_CSR &= 0xF0;        // unset channel
@@ -873,6 +963,13 @@ void do_adc(adc_channel_t channel, u16 *pDst) {
   *pDst = (high << 2) | (low & 0x03);
 }
 
+/**
+ * @brief Do a single ADC measurement with a pause before the measurement
+ * Note: the measurement will take (time+1)*10 us
+ * @param channel Which ADC channel to use (AIN3 is for ambient, AIN4 is for reflectivity)
+ * @param pDst Where to put the value
+ * @param time How many 10 us long loops to wait before measuring the value
+ */
 // at address 0x9373
 void do_adc_timed(adc_channel_t channel, u16 *pDst, u8 time) {
   TIM1_IER  = UIE;  // overflow event
@@ -881,6 +978,7 @@ void do_adc_timed(adc_channel_t channel, u16 *pDst, u8 time) {
   TIM1_CR1  = CEN;  // enable timer
   us10Counter = 0;
 
+  // wait until limit - 10 us elapsed
   while (us10Counter <= (time - 1)) {}
 
   ADC_CSR &= 0xF0;         // unset channel
@@ -888,6 +986,7 @@ void do_adc_timed(adc_channel_t channel, u16 *pDst, u8 time) {
   ADC_CSR &= ~(1 << EOC);  // clear end-of-conversion
   ADC_CR1 |=  (1 << ADON); // start new conversion
 
+  // wait until additional 20 us elapsed
   while (us10Counter <= (time + 1)) {}
 
   TIM1_CR1 &= ~(1 << CEN); // disable timer
@@ -897,12 +996,19 @@ void do_adc_timed(adc_channel_t channel, u16 *pDst, u8 time) {
   *pDst = (high << 2) | ( low & 0x03 );
 }
 
+/**
+ * @brief 10 us timer tick
+ */
 // at address 0x9a22
 void irq_10microsecond_tick(void) {
   TIM1_SR1 &= ~UIF;
   us10Counter++;
 }
 
+/**
+ * @brief Measure reflectivity calibration coefficients and encode them for EEPROM storage
+ * @param params Where to store the parameters
+ */
 // at address 0x9493
 void calibration_perform(u32 *params) {
   u16 red, green, blue, black;
@@ -914,6 +1020,11 @@ void calibration_perform(u32 *params) {
   params[2] = (u32)((409.0f / (float) blue ) * 1000.0f);
 }
 
+/**
+ * @brief Import integer calibration coefficients in EEPROM format to global state
+ * @param params Where to take the parameters from
+ * @returns Whether the import succeeded (always true)
+ */
 // at address 0x95f4
 u8 calibration_import(u32 *params) {
   redFactor   = (float) params[0] / 1000.0f;
@@ -922,8 +1033,12 @@ u8 calibration_import(u32 *params) {
   return true;
 }
 
+/**
+ * @brief Setup pins for COL-AMBIENT measurements
+ */
 // at address 0x97b8
 void ambient_setup(void) {
+  // disable all leds
   PA_ODR &= ~(1 << RED1);
   PA_ODR &= ~(1 << RED2);
   PA_ODR &= ~(1 << GREEN1);
@@ -931,19 +1046,26 @@ void ambient_setup(void) {
   PC_ODR &= ~(1 << BLUE1);
   PC_ODR &= ~(1 << BLUE2);
 
+  // enable smoothing capacitor
   PC_DDR |=  (1 << CAP);
   PC_ODR |=  (1 << CAP);
   PC_CR1 |=  (1 << CAP);
 
+  // disable signal attenuation
   PC_DDR &= ~(1 << BRIGHT);
   PC_CR1 &= ~(1 << BRIGHT);
   ambientMode = AMBIENT_DARK;
 }
 
+/**
+ * @brief Setup pins for reflectivity measurements
+ */
 // at address 0x9a01
 void color_setup(void) {
+  // disable smoothing capacitor
   PC_DDR &= ~(1 << CAP);
   PC_CR1 &= ~(1 << CAP);
+  // disable signal attenuation
   PC_DDR &= ~(1 << BRIGHT);
   PC_CR1 &= ~(1 << BRIGHT);
 }
@@ -952,6 +1074,12 @@ void color_setup(void) {
 ///////////////////////
 // UART communication
 
+/**
+ * @brief Add new data to TX queue
+ * @param data what to send
+ * @param length how long it is
+ * @returns Whether the transmission was successfully scheduled
+ */
 // at address 0x973b
 tx_status_t uart_transmit(u8 *data, u8 length) {
   if (txActive)
@@ -974,6 +1102,9 @@ tx_status_t uart_transmit(u8 *data, u8 length) {
   return TX_OK;
 }
 
+/**
+ * @brief UART tx ready interrupt
+ */
 // at address 0x988d
 void irq_uart_tx(void) {
   if (txRemaining == 0) {
@@ -989,6 +1120,11 @@ void irq_uart_tx(void) {
 }
 
 
+/**
+ * @brief Try to receive new frame from the EV3
+ * @param pOut where to put the full message
+ * @returns whether a frame was successfully received
+ */
 // at address 0x8ed0
 u8 uart_receive(u8* pOut) {
   u8 newFrame = false;
@@ -1058,6 +1194,9 @@ u8 uart_receive(u8* pOut) {
   return newFrame;
 }
 
+/**
+ * @brief UART byte received interrupt
+ */
 // at address 0x98e0
 void irq_uart_rx(void) {
   *rxTarget = UART1_DR;
@@ -1068,6 +1207,9 @@ void irq_uart_rx(void) {
   }
 }
 
+/**
+ * @brief Reset circular RX buffer to its initial state
+ */
 // at address 0x9b26
 void uart_rxbuf_rewind(void) {
   rxTarget = &rxBuffer[0];
@@ -1075,6 +1217,9 @@ void uart_rxbuf_rewind(void) {
 }
 
 
+/**
+ * @brief Prepare UART for handshake
+ */
 // at address 0x9869
 void uart_enable(void) {
   // 2400 baud
@@ -1089,12 +1234,18 @@ void uart_enable(void) {
   rxReadPtr = 0;
 }
 
+/**
+ * @brief Disable UART and ground the pins
+ */
 // at address 0x9b50
 void uart_disable(void) {
   UART1_CR1 |= (1 << UARTD); // disable uart
   uart_ground_pins();
 }
 
+/**
+ * @brief UART initialization
+ */
 // at address 0x9a12
 void uart_setup(void) {
   uart_ground_pins();
@@ -1103,6 +1254,9 @@ void uart_setup(void) {
   PD_CR2 &= ~(1 << UART_RX);
 }
 
+/**
+ * @brief Ground UART pins
+ */
 // at address 0x9a2f
 void uart_ground_pins(void) {
   PD_DDR |=  (1 << UART_TX);
@@ -1110,6 +1264,10 @@ void uart_ground_pins(void) {
   PD_CR1 |=  (1 << UART_TX);
 }
 
+/**
+ * @brief Enter high baudrate mode (57600 baud)
+ * @returns Whether the speed was changed
+ */
 // at address 0x99ef
 tx_status_t uart_enter_hispeed(void) {
   if (txActive)
@@ -1125,6 +1283,9 @@ tx_status_t uart_enter_hispeed(void) {
 //////////////////////////////
 // Initialization procedures
 
+/**
+ * @brief Perform hardware initialization
+ */
 // at address 0x9a54
 void initialize(void) {
   tick_setup();
@@ -1132,6 +1293,9 @@ void initialize(void) {
   measurement_setup();
 }
 
+/**
+ * @brief Prepare timer + its interrupt for incrementing the millisecond counter
+ */
 // at address 0x991a
 void tick_setup(void) {
   CLK_CKDIVR = 0; // HSI clock = CPU clock = master clock = 16 MHz
@@ -1147,12 +1311,18 @@ void tick_setup(void) {
   enableInterrupts(); // unmask interrupts
 }
 
+/**
+ * @brief Millisecond counter incrementing interrupt
+ */
 // at address 0x9a48
 void irq_millisecond_tick(void) {
   TIM2_SR1 &= ~UIF;
   msCounter++;
 }
 
+/**
+ * @brief Initial GPIO setup
+ */
 // at address 0x9169
 void gpio_setup(void) {
   // inputs
@@ -1222,6 +1392,9 @@ void gpio_setup(void) {
   PD_CR1 |=  (1 << PD4);
 }
 
+/**
+ * @brief Load calibration parameters from EEPROM
+ */
 // at address 0x9964
 void measurement_setup(void) {
   u32 params[3];
@@ -1232,6 +1405,9 @@ void measurement_setup(void) {
   calibration_import(params);
 }
 
+/**
+ * @brief Initial ADC setup
+ */
 // at address 0x9979
 void adc_setup(void) {
   ADC_CSR &= 0xF0; // reset channel
@@ -1240,6 +1416,9 @@ void adc_setup(void) {
   ADC_CR1 |=  (1 << ADON); // start dummy conversion
 }
 
+/**
+ * @brief Bad interrupt received - lock up the processor, wait for watchdog reset
+ */
 // at address 0x9bba
 void irq_bad(void) {
   while (true) {
@@ -1247,6 +1426,9 @@ void irq_bad(void) {
   }
 }
 
+/**
+ * @brief Infinite loop
+ */
 // at address 0x9bae
 void abort(void) {
   while(true) {}
@@ -1256,6 +1438,9 @@ void abort(void) {
 ///////////////////////////
 // Watchdog configuration
 
+/**
+ * @brief Setup the watchdog to reset the sensor after ~1sec without refresh
+ */
 // at address 0x9934
 void wdg_setup(void) {
   IWDG_KR  = KEY_ENABLE;
@@ -1266,6 +1451,9 @@ void wdg_setup(void) {
   IWDG_KR  = KEY_ENABLE;
 }
 
+/**
+ * @brief Refresh the watchdog so that the it will not reset the MCU
+ */
 // at address 0x9ba9
 void wdg_refresh(void) {
   IWDG_KR = KEY_REFRESH;
@@ -1275,6 +1463,10 @@ void wdg_refresh(void) {
 //////////////
 // EEPROM IO
 
+/**
+ * @brief Load reflectivity calibration parameters from EEPROM
+ * @param params Where to store them
+ */
 // at address 0x98fd
 void eeprom_load(u32 *params) {
   params[0] = EEPROM_RED_COEF;
@@ -1283,6 +1475,10 @@ void eeprom_load(u32 *params) {
   eepromPtr = &EEPROM_GRN_COEF; // unused
 }
 
+/**
+ * @brief Store reflectivity calibration parameters to EEPROM
+ * @param params Where to find them
+ */
 // at address 0x97e9
 void eeprom_store(u32 *params) {
   FLASH_DUKR = 0xAE;
@@ -1299,7 +1495,8 @@ void eeprom_store(u32 *params) {
 /////////////////////////////
 // Sensor typedata messages
 
-// converting this to C-style arrays would introduce unnecessary clutter
+// these messages essentially make the sensor "plug-and-play"
+// kept as pseudocode - converting this to C-style arrays would introduce unnecessary clutter
 
 0x9bb7 data: 40 1d a2          // this is 29 = EV3 Color sensor
 0x9bb3 data: 49 05 02 b1       // 6 modes, 3 views
