@@ -17,48 +17,60 @@
 // u8 calleeSavedRegs[8]; // @ [$08]
 
 // real variables
-u8   lastColor;    // @ [$10]
-u8   mainState;    // @ [$11]
-u8   initState;    // @ [$12]
-u8   rxBuffer[35]; // @ [$13]
-u8   txBuffer[35]; // @ [$36]
-u8   frame[35];    // @ [$59]
-f32  redFactor;    // @ [$7c]
-f32  greenFactor;  // @ [$80]
-f32  blueFactor;   // @ [$84]
-u16  lastRefRawFg; // @ [$88]
-u16  lastRefRawBg; // @ [$8a]
-u16  lastRefRgbR;  // @ [$8c]
-u16  lastRefRgbG;  // @ [$8e]
-u16  lastRefRgbB;  // @ [$90]
-u16  lastMsTick;   // @ [$92]
-u16  eventTimer;   // @ [$94]
-u8  *txTarget;     // @ [$96]
-u8  *rxTarget;     // @ [$98]
-u32 *eepromPtr;    // @ [$9a] ; never read
-u16  msCounter;    // @ [$9c]
-u8   forceSend;    // @ [$9e]
-u8   calAuthOk;    // @ [$9f]
-u8   lastAmbient;  // @ [$a0]
-u8   lastReflect;  // @ [$a1]
-u8   pauseCounter; // @ [$a2]
-u8   syncAttempts; // @ [$a3]
-u8   us10Counter;  // @ [$a4]
-u8   ambientMode;  // @ [$a5]
-u8   txRemaining;  // @ [$a6]
-u8   txActive;     // @ [$a7]
-u8   rxWritePtr;   // @ [$a8]
-u8   rxReadPtr;    // @ [$a9]
-u8   frameLength;  // @ [$aa]
-u8   framePtr;     // @ [$ab]
-u8   frameXor;     // @ [$ac]
 
-// EEPROM variables
-// ----------------
 
-#define EEPROM_RED_COEF (*((u32*) 0x4000))
-#define EEPROM_GRN_COEF (*((u32*) 0x4004))
-#define EEPROM_BLU_COEF (*((u32*) 0x400c))
+// sensor states
+//                      [...] is the hex address of this variable in RAM
+u8   mainState;    // @ [$11] // main sensor state
+u8   initState;    // @ [$12] // sensor handshake state
+u8   ambientMode;  // @ [$a5] // brightness mode for COL-AMBIENT (AMBIENT_DARK, AMBIENT_BRIGHT)
+u8   calAuthOk;    // @ [$9f] // whether COL-CAL will start sensor factory calibration
+u8   forceSend;    // @ [$9e] // whether a reading needs to be sent even without value change
+u8   syncAttempts; // @ [$a3] // how many times the sync byte (sensor handshake) was sent
+
+// last measured values (new measurements are sent only if they are different from this)
+u8   lastColor;    // @ [$10] // last measured COL-COLOR color code
+u16  lastRefRawFg; // @ [$88] // last measured REF-RAW foreground
+u16  lastRefRawBg; // @ [$8a] // last measured REF-RAW background
+u16  lastRefRgbR;  // @ [$8c] // last measured RGB-RAW color - red component
+u16  lastRefRgbG;  // @ [$8e] // last measured RGB-RAW color - green component
+u16  lastRefRgbB;  // @ [$90] // last measured RGB-RAW color - blue component
+u8   lastAmbient;  // @ [$a0] // last measured COL-AMBIENT value
+u8   lastReflect;  // @ [$a1] // last measured COL-REFLECT value
+
+// timing variables
+u16  msCounter;    // @ [$9c] // current millisecond counter, incremented by timing interrupt
+u8   us10Counter;  // @ [$a4] // measurement timing counter, incremented each 10 us by an interrupt
+u16  lastMsTick;   // @ [$92] // millisecond handled in the last sensor loop
+u16  eventTimer;   // @ [$94] // auxiliary ms counter for timing handshake parts
+u8   pauseCounter; // @ [$a2] // auxiliary ms counter for timing handshake parts (pause between separate modes)
+
+// data for UART receive interrupt (EV3->sensor)
+u8   rxBuffer[35]; // @ [$13] // EV3->sensor message circular buffer for UART interrupt
+u8  *rxTarget;     // @ [$98] // position pointer for UART read interrupt
+u8   rxWritePtr;   // @ [$a8] // write position in the RX circular buffer (updated by interrupt)
+u8   rxReadPtr;    // @ [$a9] // read  position in the RX circular buffer (updated by main loop)
+
+// data for UART transmit interrupt (sensor->EV3)
+u8   txBuffer[35]; // @ [$36] // message buffer for UART interrupt
+u8  *txTarget;     // @ [$96] // position pointer for UART write interrupt
+u8   txRemaining;  // @ [$a6] // how many bytes there are yet for the UART write interrupt to transmit
+u8   txActive;     // @ [$a7] // whether UART transmission is in progress
+
+// data for EV3->sensor message decoding/reassembly
+u8   frame[35];    // @ [$59] // EV3->sensor message reassembly buffer
+u8   frameLength;  // @ [$aa] // decoded length of the current EV3->sensor in-flight message
+u8   framePtr;     // @ [$ab] // number of decoded frames in a byte
+u8   frameXor;     // @ [$ac] // local checksum of the current in-flight EV3->sensor message
+
+// calibration coefficients
+f32  redFactor;    // @ [$7c] // parsed red   calibration factor
+f32  greenFactor;  // @ [$80] // parsed green calibration factor
+f32  blueFactor;   // @ [$84] // parsed blue  calibration factor
+#define EEPROM_RED_COEF (*((u32*) 0x4000)) // EEPROM red coefficient address
+#define EEPROM_GRN_COEF (*((u32*) 0x4004)) // EEPROM green coefficient address
+#define EEPROM_BLU_COEF (*((u32*) 0x400c)) // EEPROM blue coefficient address
+u32 *eepromPtr;    // @ [$9a] ; never read, set to EEPROM_GRN_COEF
 
 // code
 // ----
