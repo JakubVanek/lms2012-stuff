@@ -44,10 +44,9 @@ Addr    Opcode Instruction
 0x8078:  82 00 9b ba    int $9bba
 0x807c:  82 00 9b ba    int $9bba
 ; program instructions follow
-; memcpy stub
+; memcpy
 0x8080:  b7 00          ld $00,A
 0x8082:  27 0d          jreq $8091  (offset=13)
-; update()
 0x8084:  90 f6          ld A, (Y)
 0x8086:  f7             ld (X),A
 0x8087:  5c             incw X
@@ -57,6 +56,7 @@ Addr    Opcode Instruction
 0x808d:  b7 00          ld $00,A
 0x808f:  26 f3          jrne $8084  (offset=-13)
 0x8091:  81             ret
+; update()
 0x8092:  52 61          sub SP, #$61
 0x8094:  96             ldw X, SP
 0x8095:  1c 00 31       addw X, #$31
