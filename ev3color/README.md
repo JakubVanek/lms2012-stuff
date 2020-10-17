@@ -7,6 +7,11 @@ Please note that there may be accidental errors in the code that are
 not present in the original firmware. For verification, please check
 against disassembly of the original [flash image](binaries/flash.bin).
 
+Partial diassembly can be found in [`assembler.asm`](assembler.asm).
+The disassembly is not complete because `naken_util` is unable to
+recognize constants in the instruction stream and this breaks the decoding
+in some functions. The same goes for data sections.
+
 ## Why?
 
 Mostly for the challenge, but there was also another reason.
