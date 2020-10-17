@@ -106,6 +106,7 @@ void main(void) {
 /**
  * @brief Sensor state machine
  */
+// at address 0x8092
 void update(void) {
   u16 currentMs = msCounter;
   u8 received[35];
