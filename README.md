@@ -4,6 +4,11 @@
 
 This contains reverse-engineered EV3 color sensor firmware source code. See [`ev3color`](ev3color) for details.
 
+## EV3 sensor communication on a logic analyzer
+
+This contains Sigrok/Pulseview recordings of the EV3 sensor communication.
+See [`ev3sensors`](ev3sensors) for details.
+
 ## LMS2012 formats
 
 ### RBF (Robot Bytecode File)
