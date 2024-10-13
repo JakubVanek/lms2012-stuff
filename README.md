@@ -9,6 +9,16 @@ This contains reverse-engineered EV3 color sensor firmware source code. See [`ev
 This contains Sigrok/Pulseview recordings of the EV3 sensor communication.
 See [`ev3sensors`](ev3sensors) for details.
 
+## EV3 protocol documentation/discussion
+
+I have created an overview document describing the EV3 sensor protocol: [link](https://docs.google.com/document/d/15vNfpAkkZv4ggJ7twMF7BE-ud3BWZm7aO_MzIx2rBx8/edit?usp=sharing).
+The goal fo the document is to help with implementing custom sensors.
+
+The document itself was originally written for the [Open-Cube](https://open-cube.fel.cvut.cz/) brick
+that is developed by the Department of Measurement of FEE CTU.
+However, the brick implements an unmodified EV3 protocol for keeping
+interoperability with the EV3 accessories.
+
 ## LMS2012 formats
 
 ### RBF (Robot Bytecode File)
