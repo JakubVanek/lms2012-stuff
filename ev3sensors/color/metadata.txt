@@ -1,0 +1,47 @@
+Sensor metadata:
+ - ID: 29 (EV3 Color sensor)
+ - has 6 modes total, 3 visible to user
+ - communicates at 57600 Bd
+ - mode details:
+   * Mode 0: COL-REFLECT
+     - returns 1 value(s)
+     - raw range: 0.0 ~ 100.0
+     - percent range: 0.0% ~ 100.0%
+     - SI range: 0.0pct ~ 100.0pct
+     - datatype sent from sensor: INT_8
+     - value formatting: show 3 figures & 0 decimals
+   * Mode 1: COL-AMBIENT
+     - returns 1 value(s)
+     - raw range: 0.0 ~ 100.0
+     - percent range: 0.0% ~ 100.0%
+     - SI range: 0.0pct ~ 100.0pct
+     - datatype sent from sensor: INT_8
+     - value formatting: show 3 figures & 0 decimals
+   * Mode 2: COL-COLOR
+     - returns 1 value(s)
+     - raw range: 0.0 ~ 8.0
+     - percent range: 0.0% ~ 100.0%
+     - SI range: 0.0col ~ 8.0col
+     - datatype sent from sensor: INT_8
+     - value formatting: show 2 figures & 0 decimals
+   * Mode 3: REF-RAW
+     - returns 2 value(s)
+     - raw range: 0.0 ~ 1020.1875
+     - percent range: 0.0% ~ 100.0%
+     - SI range: 0.0 ~ 1020.1875
+     - datatype sent from sensor: INT_16
+     - value formatting: show 4 figures & 0 decimals
+   * Mode 4: RGB-RAW
+     - returns 3 value(s)
+     - raw range: 0.0 ~ 1020.1875
+     - percent range: 0.0% ~ 100.0%
+     - SI range: 0.0 ~ 1020.1875
+     - datatype sent from sensor: INT_16
+     - value formatting: show 4 figures & 0 decimals
+   * Mode 5: COL-CAL
+     - returns 4 value(s)
+     - raw range: 0.0 ~ 65535.0
+     - percent range: 0.0% ~ 100.0%
+     - SI range: 0.0 ~ 65535.0
+     - datatype sent from sensor: INT_16
+     - value formatting: show 5 figures & 0 decimals

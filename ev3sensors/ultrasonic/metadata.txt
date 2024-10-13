@@ -1,0 +1,54 @@
+Sensor metadata:
+ - ID: 30 (EV3 Ultrasonic sensor)
+ - has 7 modes total, 3 visible to user
+ - communicates at 57600 Bd
+ - mode details:
+   * Mode 0: US-DIST-CM
+     - returns 1 value(s)
+     - raw range: 0.0 ~ 2550.0
+     - percent range: 0.0% ~ 100.0%
+     - SI range: 0.0cm ~ 255.0cm
+     - datatype sent from sensor: INT_16
+     - value formatting: show 5 figures & 1 decimals
+   * Mode 1: US-DIST-IN
+     - returns 1 value(s)
+     - raw range: 0.0 ~ 1000.0
+     - percent range: 0.0% ~ 100.0%
+     - SI range: 0.0inch ~ 100.0inch
+     - datatype sent from sensor: INT_16
+     - value formatting: show 5 figures & 1 decimals
+   * Mode 2: US-LISTEN
+     - returns 1 value(s)
+     - raw range: 0.0 ~ 1.0
+     - percent range: 0.0% ~ 100.0%
+     - SI range: 0.0 ~ 1.0
+     - datatype sent from sensor: INT_8
+     - value formatting: show 1 figures & 0 decimals
+   * Mode 3: US-SI-CM
+     - returns 1 value(s)
+     - raw range: 0.0 ~ 2550.0
+     - percent range: 0.0% ~ 100.0%
+     - SI range: 0.0cm ~ 255.0cm
+     - datatype sent from sensor: INT_16
+     - value formatting: show 5 figures & 1 decimals
+   * Mode 4: US-SI-IN
+     - returns 1 value(s)
+     - raw range: 0.0 ~ 1000.0
+     - percent range: 0.0% ~ 100.0%
+     - SI range: 0.0inch ~ 100.0inch
+     - datatype sent from sensor: INT_16
+     - value formatting: show 5 figures & 1 decimals
+   * Mode 5: US-DC-CM
+     - returns 1 value(s)
+     - raw range: 0.0 ~ 2550.0
+     - percent range: 0.0% ~ 100.0%
+     - SI range: 0.0cm ~ 255.0cm
+     - datatype sent from sensor: INT_16
+     - value formatting: show 5 figures & 1 decimals
+   * Mode 6: US-DC-IN
+     - returns 1 value(s)
+     - raw range: 0.0 ~ 1000.0
+     - percent range: 0.0% ~ 100.0%
+     - SI range: 0.0inch ~ 100.0inch
+     - datatype sent from sensor: INT_16
+     - value formatting: show 5 figures & 1 decimals

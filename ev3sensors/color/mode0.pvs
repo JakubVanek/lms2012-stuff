@@ -4,18 +4,18 @@ meta_objs=0
 views=1
 
 [D0]
-color=4280306311
+color=4279638298
 conv_options=0
 conversion_type=0
 enabled=true
-name=Sensor TX
+name=Sensor -> brick
 
 [D1]
-color=4291076096
+color=4287582722
 conv_options=0
 conversion_type=0
 enabled=true
-name=Sensor RX
+name=Brick -> sensor
 
 [D2]
 color=4291559424
@@ -60,10 +60,10 @@ enabled=false
 name=D7
 
 [decode_signal0]
-channel0\assigned_signal_name=Sensor RX
+channel0\assigned_signal_name=Sensor -> brick
 channel0\initial_pin_state=2
 channel0\name=RX
-channel1\assigned_signal_name=Sensor TX
+channel1\assigned_signal_name=Brick -> sensor
 channel1\initial_pin_state=2
 channel1\name=TX
 channels=2
@@ -93,26 +93,26 @@ decoder0\option0\name=baudrate
 decoder0\option0\type=x
 decoder0\option0\value=@ByteArray(`\t\0\0\0\0\0\0)
 decoder0\options=1
-decoder0\row0\visible=true
+decoder0\row0\visible=false
 decoder0\row1\visible=true
-decoder0\row2\visible=true
+decoder0\row2\visible=false
 decoder0\row3\visible=true
 decoder0\row4\visible=true
-decoder0\row5\visible=true
+decoder0\row5\visible=false
 decoder0\row6\visible=true
-decoder0\row7\visible=true
+decoder0\row7\visible=false
 decoder0\row8\visible=true
 decoder0\row9\visible=true
 decoder0\visible=true
 decoders=1
 enabled=true
-name=Handshake
+name=UART handshake
 
 [decode_signal1]
-channel0\assigned_signal_name=Sensor RX
+channel0\assigned_signal_name=Sensor -> brick
 channel0\initial_pin_state=2
 channel0\name=RX
-channel1\assigned_signal_name=Sensor TX
+channel1\assigned_signal_name=Brick -> sensor
 channel1\initial_pin_state=2
 channel1\name=TX
 channels=2
@@ -142,20 +142,20 @@ decoder0\option0\name=baudrate
 decoder0\option0\type=x
 decoder0\option0\value=@ByteArray(\0\xe1\0\0\0\0\0\0)
 decoder0\options=1
-decoder0\row0\visible=true
+decoder0\row0\visible=false
 decoder0\row1\visible=true
-decoder0\row2\visible=true
-decoder0\row3\visible=true
+decoder0\row2\visible=false
+decoder0\row3\visible=false
 decoder0\row4\visible=true
-decoder0\row5\visible=true
+decoder0\row5\visible=false
 decoder0\row6\visible=true
-decoder0\row7\visible=true
-decoder0\row8\visible=true
+decoder0\row7\visible=false
+decoder0\row8\visible=false
 decoder0\row9\visible=true
 decoder0\visible=true
 decoders=1
 enabled=true
-name=Data
+name=UART data
 
 [view0]
 D0\trace_height=34
@@ -166,9 +166,9 @@ D4\trace_height=34
 D5\trace_height=34
 D6\trace_height=34
 D7\trace_height=34
-offset=22 serialization::archive 18 0 0 0 0 0 0 0 0 0 0 0 0 0 6
-scale=0.0025485714285714287
-segment_display_mode=1
-splitter_state=@ByteArray(\0\0\0\xff\0\0\0\x1\0\0\0\x2\0\0\0m\0\0\a\xe\x1\0\0\0\x1\x1\0\0\0\x1\0)
-v_offset=-42
+offset=22 serialization::archive 18 0 0 0 0 68302661 50864254 32921135 58095479 67491795 0 -8 1 0 6
+scale=0.012422140712213717
+segment_display_mode=3
+splitter_state=@ByteArray(\0\0\0\xff\0\0\0\x1\0\0\0\x2\0\0\0\x89\0\0\x5\xad\x1\0\0\0\x1\x1\0\0\0\x1\0)
+v_offset=-256
 zero_offset=22 serialization::archive 18 0 0 0 0 0 0 0 0 0 0 0 0 0 6
