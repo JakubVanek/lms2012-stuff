@@ -1,0 +1,47 @@
+Initialization done. Sensor metadata:
+ - ID: 33
+ - has 6 modes total, 3 visible to user
+ - communicates at 57600 Bd
+ - mode details:
+   * Mode 0: IR-PROX
+     - returns 1 value(s)
+     - raw range: 0.0 ~ 100.0
+     - percent range: 0.0% ~ 100.0%
+     - SI range: 0.0pct ~ 100.0pct
+     - datatype sent from sensor: INT_8
+     - value formatting: show 3 figures & 0 decimals
+   * Mode 1: IR-SEEK
+     - returns 8 value(s)
+     - raw range: -100.0 ~ 100.0
+     - percent range: 0.0% ~ 100.0%
+     - SI range: -100.0pct ~ 100.0pct
+     - datatype sent from sensor: INT_8
+     - value formatting: show 3 figures & 0 decimals
+   * Mode 2: IR-REMOTE
+     - returns 4 value(s)
+     - raw range: 0.0 ~ 10.0
+     - percent range: 0.0% ~ 100.0%
+     - SI range: 0.0btn ~ 10.0btn
+     - datatype sent from sensor: INT_8
+     - value formatting: show 3 figures & 0 decimals
+   * Mode 3: IR-REM-A
+     - returns 1 value(s)
+     - raw range: 0.0 ~ 65535.0
+     - percent range: 0.0% ~ 100.0%
+     - SI range: 0.0 ~ 65535.0
+     - datatype sent from sensor: INT_16
+     - value formatting: show 6 figures & 0 decimals
+   * Mode 4: IR-S-ALT
+     - returns 4 value(s)
+     - raw range: 0.0 ~ 100.0
+     - percent range: 0.0% ~ 100.0%
+     - SI range: 0.0pct ~ 100.0pct
+     - datatype sent from sensor: INT_8
+     - value formatting: show 3 figures & 0 decimals
+   * Mode 5: IR-CAL
+     - returns 2 value(s)
+     - raw range: 0.0 ~ 65535.0
+     - percent range: 0.0% ~ 100.0%
+     - SI range: 0.0 ~ 65535.0
+     - datatype sent from sensor: INT_16
+     - value formatting: show 5 figures & 0 decimals
