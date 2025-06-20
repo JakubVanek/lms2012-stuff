@@ -19,6 +19,11 @@ that is developed by the Department of Measurement of FEE CTU.
 However, the brick implements an unmodified EV3 protocol for keeping
 interoperability with the EV3 accessories.
 
+## EV3 HID simulator
+
+This is a WIP/proof-of-concept simulator of the EV3 USB interface.
+It was used for (re)testing the flasher implementation in ev3duder.
+
 ## LMS2012 formats
 
 ### RBF (Robot Bytecode File)
